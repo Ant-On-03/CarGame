@@ -69,8 +69,8 @@ public record CarConfig(
                 DriveType.RWD,
                 0.8,                        // dragCoefficient — minimal drag, insane top speed
                 60.0,                       // rollingResistance (N)
-                50.0,                       // angularDamping (N-m-s/rad) — almost zero, razor sharp yaw
-                15000.0,                    // steeringAssistTorque (N-m) — massive assist
+                250.0,                      // angularDamping (N-m-s/rad) — increased for stability with speed-dependent term
+                5000.0,                     // steeringAssistTorque (N-m) — reduced; input smoothing replaces brute-force assist
                 Tire.gripFront(),
                 Tire.driftRear()
         );

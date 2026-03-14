@@ -39,7 +39,18 @@ public class GameLoop implements Runnable {
     private final Camera camera;
     private final double physicsDt;
 
+    /**
+     * Steering smoothing rates (per-tick lerp).
+     * <p>
+     * Attack rate: how fast steering reaches full lock when key is held.
+     * Release rate: how fast steering auto-centres when key is released (faster).
+     * At 120 Hz, attack ~0.25 s to full lock, release ~0.12 s to centre.
+     */
+    private static final double STEERING_ATTACK_RATE = 4.0;  // units/s toward target
+    private static final double STEERING_RELEASE_RATE = 8.0;  // units/s toward zero
+
     private volatile boolean running;
+    private double smoothedSteering = 0.0;
     private ControlInput lastControlInput = ControlInput.NONE;
 
     /**
@@ -104,22 +115,25 @@ public class GameLoop implements Runnable {
 
             accumulator += elapsed;
 
-            // Read input once per frame
-            ControlInput controlInput = new ControlInput(
-                    input.getThrottle(),
-                    input.getBrake(),
-                    input.getSteering()
-            );
-            lastControlInput = controlInput;
+            // Read raw input once per frame
+            double rawThrottle = input.getThrottle();
+            double rawBrake = input.getBrake();
+            double rawSteering = input.getSteering();
 
-            // Fixed-timestep physics updates
+            // Fixed-timestep physics updates (steering smoothed per tick)
             while (accumulator >= physicsDt) {
-                physics.execute(car, controlInput, physicsDt);
+                smoothedSteering = smoothSteering(smoothedSteering, rawSteering, physicsDt);
+                ControlInput smoothedInput = new ControlInput(rawThrottle, rawBrake, smoothedSteering);
+                physics.execute(car, smoothedInput, physicsDt);
                 accumulator -= physicsDt;
             }
 
-            // Update camera to follow car (frame-rate independent exponential lerp)
-            camera.update(car.getPosition().x(), car.getPosition().y(), elapsed);
+            // Store the smoothed input for rendering (wheel angle uses this)
+            lastControlInput = new ControlInput(rawThrottle, rawBrake, smoothedSteering);
+
+            // Update camera to follow car with velocity-based look-ahead
+            Vector2 vel = car.getVelocity();
+            camera.update(car.getPosition().x(), car.getPosition().y(), vel.x(), vel.y(), elapsed);
 
             render();
             sleepUntilNextFrame(currentTime);
@@ -128,6 +142,30 @@ public class GameLoop implements Runnable {
 
     public void stop() {
         running = false;
+    }
+
+    // ---- Steering smoothing ----
+
+    /**
+     * Smooths steering input with different attack and release rates.
+     * <p>
+     * When the player is pressing a key (target != 0 and same sign as current,
+     * or current is near zero), use the slower attack rate for gradual turn-in.
+     * When the player releases (target is zero or opposite sign), use the faster
+     * release rate for snappy auto-centring.
+     */
+    private static double smoothSteering(double current, double target, double dt) {
+        double diff = target - current;
+        // Determine whether we're attacking (moving toward a steering target)
+        // or releasing (moving back toward centre or reversing direction)
+        boolean releasing = (target == 0.0) || (Math.signum(target) != Math.signum(current) && Math.abs(current) > 0.01);
+        double rate = releasing ? STEERING_RELEASE_RATE : STEERING_ATTACK_RATE;
+        double maxDelta = rate * dt;
+
+        if (Math.abs(diff) <= maxDelta) {
+            return target;
+        }
+        return current + Math.signum(diff) * maxDelta;
     }
 
     // ---- Rendering (physics metres → screen pixels via camera) ----

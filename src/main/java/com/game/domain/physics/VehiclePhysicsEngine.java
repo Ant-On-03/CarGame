@@ -30,6 +30,33 @@ public class VehiclePhysicsEngine {
     private static final double STOP_SPEED_THRESHOLD = 0.1;
     private static final double MIN_BRAKE_SPEED = 0.3;
 
+    /**
+     * Speed-sensitive steering factor.
+     * Formula: effectiveMaxAngle = maxSteeringAngle / (1 + speed * SPEED_STEERING_FACTOR)
+     * At 0 m/s: full lock (75°). At 40 m/s (~144 km/h): 75°/4 ≈ 18.75°.
+     */
+    private static final double SPEED_STEERING_FACTOR = 0.075;
+
+    /**
+     * Speed-proportional angular damping coefficient (N-m-s²/rad/m).
+     * Added to the base angularDamping to increase yaw resistance at speed.
+     * Total damping = baseDamping + speed * SPEED_ANGULAR_DAMPING_FACTOR.
+     */
+    private static final double SPEED_ANGULAR_DAMPING_FACTOR = 30.0;
+
+    /**
+     * Drift-assist (counter-steer) torque gain.
+     * When rear tires slip, a corrective torque nudges the car's heading
+     * toward its velocity vector, making drifts recoverable.
+     */
+    private static final double DRIFT_ASSIST_GAIN = 3000.0;
+
+    /**
+     * Minimum speed (m/s) to engage drift assist. Below this the assist
+     * is not needed and would fight low-speed manoeuvring.
+     */
+    private static final double DRIFT_ASSIST_MIN_SPEED = 3.0;
+
     private final WeightTransferCalculator weightTransfer;
     private final TireForceModel tireForceModel;
     private final TerrainProvider terrainProvider;
@@ -63,8 +90,11 @@ public class VehiclePhysicsEngine {
         // 3. Weight transfer → normal forces
         weightTransfer.distribute(car, longAccel, latAccel);
 
-        // 4. Steering angle
-        double steeringAngle = input.steering() * cfg.maxSteeringAngle();
+        // 4. Speed-sensitive steering angle
+        //    Full lock at standstill, reduced at speed to prevent snap oversteer.
+        double speed = car.getSpeed();
+        double effectiveMaxAngle = cfg.maxSteeringAngle() / (1.0 + speed * SPEED_STEERING_FACTOR);
+        double steeringAngle = input.steering() * effectiveMaxAngle;
 
         // 5. Per-wheel force accumulation
         Vector2 totalForce = Vector2.ZERO;
@@ -90,10 +120,16 @@ public class VehiclePhysicsEngine {
         // 6. Aerodynamic drag and rolling resistance
         totalForce = totalForce.add(computeDrag(car, cfg));
         totalForce = totalForce.add(computeRollingResistance(car, cfg, totalExtraRollingResistance));
-        totalTorque -= cfg.angularDamping() * car.getAngularVelocity();
+
+        // Speed-dependent angular damping: base + proportional-to-speed term
+        double effectiveDamping = cfg.angularDamping() + speed * SPEED_ANGULAR_DAMPING_FACTOR;
+        totalTorque -= effectiveDamping * car.getAngularVelocity();
 
         // 6b. Arcade steering assist — direct yaw torque for instant response
         totalTorque += computeSteeringAssist(car, input, cfg);
+
+        // 6c. Drift assist — counter-steer torque when rear tires are slipping
+        totalTorque += computeDriftAssist(car, forward);
 
         // 7. Integration (semi-implicit Euler)
         integrate(car, cfg, totalForce, totalTorque, dt);
@@ -221,6 +257,47 @@ public class VehiclePhysicsEngine {
         double speed = car.getSpeed();
         double speedFactor = Math.min(speed / 5.0, 1.0);
         return input.steering() * cfg.steeringAssistTorque() * speedFactor;
+    }
+
+    // ---- Drift assist ----
+
+    /**
+     * Counter-steer assist ("drift assist").
+     * <p>
+     * When the car is sliding (heading differs from velocity direction),
+     * this applies a corrective yaw torque that gently nudges the heading
+     * toward the velocity vector. The result is that drifts feel heroic
+     * and recoverable instead of instantly spiralling into a 360.
+     * <p>
+     * The torque is proportional to the cross product of the forward vector
+     * and the velocity direction (measures misalignment), scaled by speed.
+     * Only active when at least one rear tire is slipping.
+     */
+    private double computeDriftAssist(Car car, Vector2 forward) {
+        double speed = car.getSpeed();
+        if (speed < DRIFT_ASSIST_MIN_SPEED) {
+            return 0.0;
+        }
+
+        // Check if any rear tire is slipping
+        boolean rearSlipping = false;
+        for (Wheel wheel : car.getWheels()) {
+            if (wheel.isRear() && wheel.isSlipping()) {
+                rearSlipping = true;
+                break;
+            }
+        }
+        if (!rearSlipping) {
+            return 0.0;
+        }
+
+        // Misalignment: cross(forward, velDir) gives signed angular error
+        Vector2 velDir = car.getVelocity().normalize();
+        double misalignment = forward.cross(velDir);
+
+        // Scale by speed — stronger correction at higher speed where spins are more dangerous
+        double speedFactor = Math.min(speed / 10.0, 1.0);
+        return misalignment * DRIFT_ASSIST_GAIN * speedFactor;
     }
 
     // ---- Integration ----

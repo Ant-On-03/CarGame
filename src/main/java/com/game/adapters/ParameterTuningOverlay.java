@@ -204,8 +204,8 @@ public class ParameterTuningOverlay implements KeyListener {
         private static final double REF_BRAKE = 20000.0;
         private static final double REF_DRAG = 0.8;
         private static final double REF_ROLLING_RES = 60.0;
-        private static final double REF_ANGULAR_DAMP = 50.0;
-        private static final double REF_STEERING_ASSIST = 15000.0;
+        private static final double REF_ANGULAR_DAMP = 250.0;
+        private static final double REF_STEERING_ASSIST = 5000.0;
         private static final double REF_FRONT_CORNERING = 300000.0;
         private static final double REF_REAR_CORNERING = 40000.0;
 
