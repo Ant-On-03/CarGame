@@ -3,8 +3,10 @@ package com.game.domain.physics;
 import com.game.domain.Car;
 import com.game.domain.CarConfig;
 import com.game.domain.ControlInput;
+import com.game.domain.SurfaceType;
 import com.game.domain.Vector2;
 import com.game.domain.Wheel;
+import com.game.ports.TerrainProvider;
 
 /**
  * Top-level physics service that advances a car's state by one time step.
@@ -30,11 +32,14 @@ public class VehiclePhysicsEngine {
 
     private final WeightTransferCalculator weightTransfer;
     private final TireForceModel tireForceModel;
+    private final TerrainProvider terrainProvider;
 
     public VehiclePhysicsEngine(WeightTransferCalculator weightTransfer,
-                                TireForceModel tireForceModel) {
+                                TireForceModel tireForceModel,
+                                TerrainProvider terrainProvider) {
         this.weightTransfer = weightTransfer;
         this.tireForceModel = tireForceModel;
+        this.terrainProvider = terrainProvider;
     }
 
     /**
@@ -64,17 +69,27 @@ public class VehiclePhysicsEngine {
         // 5. Per-wheel force accumulation
         Vector2 totalForce = Vector2.ZERO;
         double totalTorque = 0.0;
+        double totalExtraRollingResistance = 0.0;
 
         for (Wheel wheel : car.getWheels()) {
+            // Query terrain surface at this wheel's world position
+            Vector2 wheelWorldPos = car.getPosition().add(
+                    wheel.getLocalOffset().rotate(car.getRotation()));
+            SurfaceType surface = terrainProvider.getSurfaceAt(
+                    wheelWorldPos.x(), wheelWorldPos.y());
+
             WheelForceResult result = computeWheelForces(
-                    car, wheel, input, steeringAngle, cfg);
+                    car, wheel, input, steeringAngle, cfg, surface.frictionMultiplier());
             totalForce = totalForce.add(result.worldForce());
             totalTorque += result.torque();
+
+            // Accumulate extra rolling resistance from surface (split per wheel)
+            totalExtraRollingResistance += surface.extraRollingResistance();
         }
 
         // 6. Aerodynamic drag and rolling resistance
         totalForce = totalForce.add(computeDrag(car, cfg));
-        totalForce = totalForce.add(computeRollingResistance(car, cfg));
+        totalForce = totalForce.add(computeRollingResistance(car, cfg, totalExtraRollingResistance));
         totalTorque -= cfg.angularDamping() * car.getAngularVelocity();
 
         // 6b. Arcade steering assist — direct yaw torque for instant response
@@ -107,7 +122,8 @@ public class VehiclePhysicsEngine {
     private WheelForceResult computeWheelForces(Car car, Wheel wheel,
                                                 ControlInput input,
                                                 double steeringAngle,
-                                                CarConfig cfg) {
+                                                CarConfig cfg,
+                                                double surfaceFriction) {
         // World-space offset from car centre to wheel
         Vector2 worldOffset = wheel.getLocalOffset().rotate(car.getRotation());
 
@@ -136,9 +152,9 @@ public class VehiclePhysicsEngine {
         double desiredLatForce = tireForceModel.computeLateralForce(
                 wheel.getTire(), wheelLongVel, wheelLatVel);
 
-        // Friction circle check
+        // Friction circle check (with terrain surface multiplier)
         TireForceResult tireResult = tireForceModel.applyFrictionLimit(
-                wheel, desiredLongForce, desiredLatForce);
+                wheel, desiredLongForce, desiredLatForce, surfaceFriction);
         wheel.setSlipping(tireResult.slipping());
 
         // Convert wheel-local force to world coordinates
@@ -178,12 +194,20 @@ public class VehiclePhysicsEngine {
         return car.getVelocity().multiply(-cfg.dragCoefficient() * speed);
     }
 
-    private Vector2 computeRollingResistance(Car car, CarConfig cfg) {
+    /**
+     * Computes rolling resistance including extra resistance from terrain surface.
+     * The extra resistance is averaged across 4 wheels and applied as a force
+     * opposing the direction of motion.
+     */
+    private Vector2 computeRollingResistance(Car car, CarConfig cfg,
+                                              double totalExtraRollingResistance) {
         double speed = car.getSpeed();
         if (speed < 0.01) {
             return Vector2.ZERO;
         }
-        return car.getVelocity().normalize().multiply(-cfg.rollingResistance());
+        // Average extra resistance across 4 wheels
+        double totalResistance = cfg.rollingResistance() + totalExtraRollingResistance / 4.0;
+        return car.getVelocity().normalize().multiply(-totalResistance);
     }
 
     // ---- Steering assist ----

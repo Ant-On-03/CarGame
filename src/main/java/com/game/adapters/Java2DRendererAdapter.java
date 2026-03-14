@@ -20,7 +20,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.Random;
 
 /**
  * Adapter that implements the {@link Renderer} port using Java2D.
@@ -28,17 +27,16 @@ import java.util.Random;
  * Performance-optimised: all Fonts, Strokes, Colors, and reusable shapes
  * are pre-allocated as fields or static constants — zero per-frame
  * object allocation in the hot path.
+ * <p>
+ * The renderer uses a camera transform to convert world-pixel coordinates
+ * to screen coordinates. Terrain chunks are drawn in world space, and the
+ * camera translation centres the view on the car.
  */
 public class Java2DRendererAdapter extends Canvas implements Renderer {
 
     // ================================================================
     // Cached colour constants (zero per-frame allocation)
     // ================================================================
-
-    // -- Environment --
-    private static final Color ASPHALT_BASE = new Color(42, 42, 48);
-    private static final Color LANE_MARKING = new Color(200, 200, 190, 50);
-    private static final Color EDGE_LINE = new Color(200, 200, 190, 30);
 
     // -- Car body --
     private static final Color BODY_FILL = new Color(25, 60, 120);
@@ -89,9 +87,6 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     private static final BasicStroke STROKE_1_5 = new BasicStroke(1.5f);
     private static final BasicStroke STROKE_TIRE_MARK = new BasicStroke(
             2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-    private static final BasicStroke STROKE_LANE_DASH = new BasicStroke(
-            2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
-            10.0f, new float[]{20.0f, 30.0f}, 0.0f);
 
     // ================================================================
     // Cached font constants
@@ -128,16 +123,19 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     private Graphics2D g2d;
     private BufferStrategy bufferStrategy;
 
-    /** Full-screen pre-rendered asphalt (built once, redrawn on resize). */
-    private BufferedImage asphaltBackground;
-    private int asphaltBgWidth;
-    private int asphaltBgHeight;
-
-    /** Tire marks ring buffer. */
+    /** Tire marks ring buffer (world-pixel coordinates). */
     private final Deque<TireMark> tireMarks = new ArrayDeque<>();
 
     /** Optional tuning overlay drawn on top of everything. */
     private ParameterTuningOverlay tuningOverlay;
+
+    /** Terrain generator for drawing chunks (set via setTerrainGenerator). */
+    private ProceduralTerrainGenerator terrainGenerator;
+
+    // ---- Camera state (set each frame via setCamera) ----
+    private double cameraWorldX;   // camera centre in metres
+    private double cameraWorldY;   // camera centre in metres
+    private double pixelsPerMeter = 8.0;
 
     // ---- Cached car shapes (rebuilt only when dimensions change) ----
     private GeneralPath cachedCarSilhouette;
@@ -176,9 +174,21 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         this.tuningOverlay = overlay;
     }
 
+    /** Sets the terrain generator for chunk rendering. */
+    public void setTerrainGenerator(ProceduralTerrainGenerator generator) {
+        this.terrainGenerator = generator;
+    }
+
     // ================================================================
     // Renderer port implementation
     // ================================================================
+
+    @Override
+    public void setCamera(double worldX, double worldY, double pixelsPerMeter) {
+        this.cameraWorldX = worldX;
+        this.cameraWorldY = worldY;
+        this.pixelsPerMeter = pixelsPerMeter;
+    }
 
     @Override
     public void beginFrame() {
@@ -189,11 +199,18 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_DEFAULT);
         g2d.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_NORMALIZE);
 
-        drawAsphaltBackground();
-        drawLaneMarkings();
+        // Clear screen with dark background (visible if terrain hasn't loaded)
+        g2d.setColor(new Color(30, 30, 35));
+        g2d.fillRect(0, 0, getWidth(), getHeight());
+
+        // Draw terrain chunks in world space
+        drawTerrainChunks();
+
+        // Apply camera transform for world-space rendering (tire marks, car)
+        applyCameraTransform();
+
         ageTireMarks();
         drawTireMarks();
-        drawControlsHUD();
     }
 
     @Override
@@ -228,6 +245,11 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
 
     @Override
     public void endFrame() {
+        // Reset transform for screen-space HUD rendering
+        g2d.setTransform(new AffineTransform());
+
+        drawControlsHUD();
+
         if (tuningOverlay != null) {
             tuningOverlay.draw(g2d, getWidth(), getHeight());
         }
@@ -249,6 +271,80 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     }
 
     // ================================================================
+    // Camera transform
+    // ================================================================
+
+    /**
+     * Applies a translation so that the camera centre maps to screen centre.
+     * After this, all draw calls use world-pixel coordinates.
+     */
+    private void applyCameraTransform() {
+        double screenCentreX = getWidth() / 2.0;
+        double screenCentreY = getHeight() / 2.0;
+        double cameraPixelX = cameraWorldX * pixelsPerMeter;
+        double cameraPixelY = cameraWorldY * pixelsPerMeter;
+
+        g2d.translate(screenCentreX - cameraPixelX, screenCentreY - cameraPixelY);
+    }
+
+    // ================================================================
+    // Terrain chunk rendering
+    // ================================================================
+
+    /**
+     * Draws visible terrain chunks. Iterates over the grid of chunks
+     * that overlap the current viewport and blits their pre-rendered images.
+     */
+    private void drawTerrainChunks() {
+        if (terrainGenerator == null) return;
+
+        double ppm = pixelsPerMeter;
+        int screenW = getWidth();
+        int screenH = getHeight();
+
+        // Camera pixel position (world-space)
+        double camPxX = cameraWorldX * ppm;
+        double camPxY = cameraWorldY * ppm;
+
+        // Viewport bounds in world metres
+        double viewLeftM = cameraWorldX - (screenW / 2.0) / ppm;
+        double viewTopM = cameraWorldY - (screenH / 2.0) / ppm;
+        double viewRightM = cameraWorldX + (screenW / 2.0) / ppm;
+        double viewBottomM = cameraWorldY + (screenH / 2.0) / ppm;
+
+        double chunkSize = ProceduralTerrainGenerator.CHUNK_SIZE_METRES;
+        int chunkPx = ProceduralTerrainGenerator.CHUNK_SIZE_PIXELS;
+
+        int minChunkX = (int) Math.floor(viewLeftM / chunkSize);
+        int maxChunkX = (int) Math.floor(viewRightM / chunkSize);
+        int minChunkY = (int) Math.floor(viewTopM / chunkSize);
+        int maxChunkY = (int) Math.floor(viewBottomM / chunkSize);
+
+        // Screen centre offset for world-to-screen conversion
+        double offsetX = screenW / 2.0 - camPxX;
+        double offsetY = screenH / 2.0 - camPxY;
+
+        for (int cy = minChunkY; cy <= maxChunkY; cy++) {
+            for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+                BufferedImage chunkImg = terrainGenerator.getChunkImage(cx, cy);
+
+                // Chunk world-pixel position
+                double chunkWorldPxX = cx * chunkSize * ppm;
+                double chunkWorldPxY = cy * chunkSize * ppm;
+
+                // Screen position
+                int screenX = (int) (chunkWorldPxX + offsetX);
+                int screenY = (int) (chunkWorldPxY + offsetY);
+
+                g2d.drawImage(chunkImg, screenX, screenY, chunkPx, chunkPx, null);
+            }
+        }
+
+        // Evict distant chunks periodically
+        terrainGenerator.evictDistantChunks(cameraWorldX, cameraWorldY);
+    }
+
+    // ================================================================
     // P2: Car silhouette + gradient cache
     // ================================================================
 
@@ -262,69 +358,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     }
 
     // ================================================================
-    // P0: Pre-rendered full-screen asphalt background
-    // ================================================================
-
-    /**
-     * Draws the asphalt background. On first call (or resize), renders
-     * a noisy asphalt texture into a full-screen BufferedImage.
-     * Subsequent frames: single drawImage() call.
-     */
-    private void drawAsphaltBackground() {
-        int w = getWidth();
-        int h = getHeight();
-
-        if (asphaltBackground == null || w != asphaltBgWidth || h != asphaltBgHeight) {
-            asphaltBackground = createFullAsphaltBackground(w, h);
-            asphaltBgWidth = w;
-            asphaltBgHeight = h;
-        }
-
-        g2d.drawImage(asphaltBackground, 0, 0, null);
-    }
-
-    /**
-     * Creates a full-screen asphalt image with per-pixel noise.
-     * Called once at startup and on resize.
-     */
-    private BufferedImage createFullAsphaltBackground(int width, int height) {
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        Random rng = new Random(42);
-
-        int baseR = ASPHALT_BASE.getRed();
-        int baseG = ASPHALT_BASE.getGreen();
-        int baseB = ASPHALT_BASE.getBlue();
-
-        for (int py = 0; py < height; py++) {
-            for (int px = 0; px < width; px++) {
-                int noise = rng.nextInt(8) - 4;
-                int r = clampByte(baseR + noise);
-                int g = clampByte(baseG + noise);
-                int b = clampByte(baseB + noise);
-                img.setRGB(px, py, (r << 16) | (g << 8) | b);
-            }
-        }
-        return img;
-    }
-
-    private void drawLaneMarkings() {
-        g2d.setColor(LANE_MARKING);
-        g2d.setStroke(STROKE_LANE_DASH);
-
-        int cx = getWidth() / 2;
-        g2d.drawLine(cx, 0, cx, getHeight());
-
-        int cy = getHeight() / 2;
-        g2d.drawLine(0, cy, getWidth(), cy);
-
-        g2d.setColor(EDGE_LINE);
-        g2d.setStroke(STROKE_1_0);
-        int margin = 40;
-        g2d.drawRect(margin, margin, getWidth() - margin * 2, getHeight() - margin * 2);
-    }
-
-    // ================================================================
     // P1: Tire marks — alpha-bucketed rendering with reusable Line2D
+    // (now in world-pixel coordinates)
     // ================================================================
 
     private void recordTireMarks(WheelRenderData[] wheels) {
@@ -355,6 +390,9 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
      * marks are sorted into {@value #TIRE_MARK_ALPHA_BUCKETS} alpha buckets.
      * Color is set once per bucket, then all lines in that bucket are drawn.
      * Total Color lookups: 16 (from pre-computed table) instead of 2000 allocations.
+     * <p>
+     * Tire marks are stored in world-pixel coordinates and drawn with the
+     * camera transform already applied.
      */
     private void drawTireMarks() {
         if (tireMarks.isEmpty()) return;
@@ -700,7 +738,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     }
 
     // ================================================================
-    // HUD (cached fonts and colors)
+    // HUD (cached fonts and colors — drawn in screen space)
     // ================================================================
 
     private void drawControlsHUD() {

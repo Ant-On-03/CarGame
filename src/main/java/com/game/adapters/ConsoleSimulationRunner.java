@@ -4,6 +4,7 @@ import com.game.application.UpdateVehiclePhysicsUseCase;
 import com.game.domain.Car;
 import com.game.domain.CarConfig;
 import com.game.domain.ControlInput;
+import com.game.domain.SurfaceType;
 import com.game.domain.Vector2;
 import com.game.domain.Wheel;
 import com.game.domain.physics.TireForceModel;
@@ -21,6 +22,9 @@ import com.game.domain.physics.WeightTransferCalculator;
  *   <li>Counter-steer with partial throttle (hold the drift)</li>
  *   <li>Straighten and coast (recover)</li>
  * </ol>
+ * <p>
+ * Uses a no-op terrain provider (always TARMAC) since there is no
+ * procedural terrain in headless mode.
  */
 public class ConsoleSimulationRunner {
 
@@ -130,10 +134,12 @@ public class ConsoleSimulationRunner {
     // ---- Wiring ----
 
     private static UpdateVehiclePhysicsUseCase createUseCase() {
+        // No-op terrain provider: always returns TARMAC for headless simulation
         return new UpdateVehiclePhysicsUseCase(
                 new VehiclePhysicsEngine(
                         new WeightTransferCalculator(),
-                        new TireForceModel()
+                        new TireForceModel(),
+                        (x, y) -> SurfaceType.TARMAC
                 )
         );
     }

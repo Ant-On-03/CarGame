@@ -1,6 +1,7 @@
 package com.game.main;
 
 import com.game.application.UpdateVehiclePhysicsUseCase;
+import com.game.domain.Camera;
 import com.game.domain.Car;
 import com.game.domain.ControlInput;
 import com.game.domain.Vector2;
@@ -18,6 +19,9 @@ import com.game.ports.WheelRenderData;
  * <p>
  * The physics domain operates in SI units (metres). A constant
  * {@link #PIXELS_PER_METER} converts to screen coordinates for rendering.
+ * <p>
+ * A {@link Camera} provides smooth-follow tracking so the car stays centred
+ * as it drives across the infinite procedural world.
  */
 public class GameLoop implements Runnable {
 
@@ -32,6 +36,7 @@ public class GameLoop implements Runnable {
     private final UpdateVehiclePhysicsUseCase physics;
     private final InputProvider input;
     private final Renderer renderer;
+    private final Camera camera;
     private final double physicsDt;
 
     private volatile boolean running;
@@ -42,8 +47,8 @@ public class GameLoop implements Runnable {
      * Override via system property {@code -Dphysics.hz=60} for weaker hardware.
      */
     public GameLoop(Car car, UpdateVehiclePhysicsUseCase physics,
-                    InputProvider input, Renderer renderer) {
-        this(car, physics, input, renderer, resolvePhysicsHz());
+                    InputProvider input, Renderer renderer, Camera camera) {
+        this(car, physics, input, renderer, camera, resolvePhysicsHz());
     }
 
     /**
@@ -52,11 +57,13 @@ public class GameLoop implements Runnable {
      * @param physicsHz physics updates per second (e.g. 60 or 120)
      */
     public GameLoop(Car car, UpdateVehiclePhysicsUseCase physics,
-                    InputProvider input, Renderer renderer, int physicsHz) {
+                    InputProvider input, Renderer renderer, Camera camera,
+                    int physicsHz) {
         this.car = car;
         this.physics = physics;
         this.input = input;
         this.renderer = renderer;
+        this.camera = camera;
         this.physicsDt = 1.0 / physicsHz;
     }
 
@@ -111,7 +118,9 @@ public class GameLoop implements Runnable {
                 accumulator -= physicsDt;
             }
 
-            wrapAroundScreen();
+            // Update camera to follow car (frame-rate independent exponential lerp)
+            camera.update(car.getPosition().x(), car.getPosition().y(), elapsed);
+
             render();
             sleepUntilNextFrame(currentTime);
         }
@@ -121,12 +130,15 @@ public class GameLoop implements Runnable {
         running = false;
     }
 
-    // ---- Rendering (physics metres → screen pixels) ----
+    // ---- Rendering (physics metres → screen pixels via camera) ----
 
     private void render() {
         double ppm = PIXELS_PER_METER;
 
-        // Build per-wheel rendering snapshots
+        // Tell the renderer where the camera is so it can set up the world→screen transform
+        renderer.setCamera(camera.getX(), camera.getY(), ppm);
+
+        // Build per-wheel rendering snapshots (world-space metres, converted to pixels by renderer)
         java.util.List<Wheel> wheels = car.getWheels();
         double steeringAngle = lastControlInput.steering() * car.getConfig().maxSteeringAngle();
         double carX = car.getPosition().x() * ppm;
@@ -165,46 +177,6 @@ public class GameLoop implements Runnable {
                 wheelData
         );
         renderer.endFrame();
-    }
-
-    // ---- Screen wrapping (in physics space) ----
-
-    private void wrapAroundScreen() {
-        int canvasW = renderer.getCanvasWidth();
-        int canvasH = renderer.getCanvasHeight();
-
-        if (canvasW == 0 || canvasH == 0) {
-            return;
-        }
-
-        double worldWidth = canvasW / PIXELS_PER_METER;
-        double worldHeight = canvasH / PIXELS_PER_METER;
-        double margin = Math.max(car.getConfig().bodyWidth(),
-                car.getConfig().bodyLength());
-
-        double x = car.getPosition().x();
-        double y = car.getPosition().y();
-        boolean wrapped = false;
-
-        if (x < -margin) {
-            x = worldWidth + margin;
-            wrapped = true;
-        } else if (x > worldWidth + margin) {
-            x = -margin;
-            wrapped = true;
-        }
-
-        if (y < -margin) {
-            y = worldHeight + margin;
-            wrapped = true;
-        } else if (y > worldHeight + margin) {
-            y = -margin;
-            wrapped = true;
-        }
-
-        if (wrapped) {
-            car.setPosition(new Vector2(x, y));
-        }
     }
 
     // ---- Frame pacing ----

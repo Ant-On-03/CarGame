@@ -55,15 +55,21 @@ public class TireForceModel {
      * Enforces the friction circle: if the combined desired force
      * exceeds the tire's grip, the wheel starts slipping and forces
      * are reduced to the dynamic friction level.
+     * <p>
+     * The {@code surfaceFriction} multiplier scales the grip limit
+     * to simulate different terrain surfaces (e.g. 1.0 for tarmac,
+     * 0.12 for ice).
      *
      * @param wheel             the wheel (normal force must already be set)
      * @param desiredLongForce  requested longitudinal force (N)
      * @param desiredLatForce   requested lateral force (N)
+     * @param surfaceFriction   terrain friction multiplier (0.0 - 1.0)
      * @return the actual force the tire can produce, plus slip state
      */
     public TireForceResult applyFrictionLimit(Wheel wheel,
                                               double desiredLongForce,
-                                              double desiredLatForce) {
+                                              double desiredLatForce,
+                                              double surfaceFriction) {
         Tire tire = wheel.getTire();
         double normalForce = wheel.getNormalForce();
 
@@ -71,7 +77,7 @@ public class TireForceModel {
             return TireForceResult.NO_GRIP;
         }
 
-        double maxStaticForce = tire.maxGripForce(normalForce);
+        double maxStaticForce = tire.maxGripForce(normalForce) * surfaceFriction;
         double desiredMagnitude = Math.sqrt(
                 desiredLongForce * desiredLongForce + desiredLatForce * desiredLatForce);
 
@@ -79,7 +85,7 @@ public class TireForceModel {
             return new TireForceResult(desiredLongForce, desiredLatForce, false);
         }
 
-        double dynamicMax = tire.dynamicGripForce(normalForce);
+        double dynamicMax = tire.dynamicGripForce(normalForce) * surfaceFriction;
         double scale = dynamicMax / desiredMagnitude;
 
         return new TireForceResult(

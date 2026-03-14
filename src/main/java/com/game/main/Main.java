@@ -3,7 +3,9 @@ package com.game.main;
 import com.game.adapters.Java2DRendererAdapter;
 import com.game.adapters.KeyboardInputAdapter;
 import com.game.adapters.ParameterTuningOverlay;
+import com.game.adapters.ProceduralTerrainGenerator;
 import com.game.application.UpdateVehiclePhysicsUseCase;
+import com.game.domain.Camera;
 import com.game.domain.Car;
 import com.game.domain.CarConfig;
 import com.game.domain.Vector2;
@@ -40,14 +42,21 @@ public class Main {
         Java2DRendererAdapter rendererAdapter =
                 new Java2DRendererAdapter(WINDOW_WIDTH, WINDOW_HEIGHT);
 
+        // --- Terrain ---
+        ProceduralTerrainGenerator terrainGenerator = new ProceduralTerrainGenerator();
+        rendererAdapter.setTerrainGenerator(terrainGenerator);
+
         // --- Window ---
         JFrame frame = createWindow(rendererAdapter, inputAdapter);
 
         // --- Domain ---
         CarConfig config = CarConfig.driftTuned();
-        double startX = (WINDOW_WIDTH / GameLoop.PIXELS_PER_METER) / 2.0;
-        double startY = (WINDOW_HEIGHT / GameLoop.PIXELS_PER_METER) / 2.0;
+        double startX = 0.0;  // start at world origin
+        double startY = 0.0;
         Car car = new Car(new Vector2(startX, startY), config);
+
+        // --- Camera (starts at car position) ---
+        Camera camera = new Camera(startX, startY);
 
         // --- Parameter tuning overlay (Tab to toggle) ---
         ParameterTuningOverlay tuningOverlay = new ParameterTuningOverlay(car);
@@ -59,12 +68,13 @@ public class Main {
         UpdateVehiclePhysicsUseCase physics = new UpdateVehiclePhysicsUseCase(
                 new VehiclePhysicsEngine(
                         new WeightTransferCalculator(),
-                        new TireForceModel()
+                        new TireForceModel(),
+                        terrainGenerator
                 )
         );
 
         // --- Game loop ---
-        GameLoop gameLoop = new GameLoop(car, physics, inputAdapter, rendererAdapter);
+        GameLoop gameLoop = new GameLoop(car, physics, inputAdapter, rendererAdapter, camera);
 
         frame.addWindowListener(new WindowAdapter() {
             @Override

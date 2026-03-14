@@ -9,6 +9,18 @@ package com.game.ports;
 public interface Renderer {
 
     /**
+     * Configures the camera for this frame. Must be called before
+     * {@link #beginFrame()}. The renderer uses these values to set up
+     * a world-to-screen transform so that all subsequent draw calls
+     * operate in world-pixel coordinates.
+     *
+     * @param worldX camera centre X in metres
+     * @param worldY camera centre Y in metres
+     * @param pixelsPerMeter scale factor from metres to pixels
+     */
+    void setCamera(double worldX, double worldY, double pixelsPerMeter);
+
+    /**
      * Prepares a new frame. Called once at the start of each render cycle.
      */
     void beginFrame();
@@ -16,8 +28,8 @@ public interface Renderer {
     /**
      * Draws the car at the given world-space position and rotation.
      *
-     * @param x        centre X in pixels
-     * @param y        centre Y in pixels
+     * @param x        centre X in world pixels
+     * @param y        centre Y in world pixels
      * @param rotation rotation in radians (0 = up, clockwise positive)
      * @param width    car width in pixels
      * @param length   car length in pixels

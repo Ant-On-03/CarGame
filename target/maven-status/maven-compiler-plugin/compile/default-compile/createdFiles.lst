@@ -16,6 +16,7 @@ com\game\domain\Car.class
 com\game\domain\DriveType.class
 com\game\domain\WheelPosition.class
 com\game\main\Main.class
+com\game\adapters\ProceduralTerrainGenerator$1.class
 com\game\domain\physics\WeightTransferCalculator.class
 com\game\domain\physics\TireForceResult.class
 com\game\main\GameLoop.class
