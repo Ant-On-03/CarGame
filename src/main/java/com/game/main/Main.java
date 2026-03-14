@@ -9,6 +9,8 @@ import com.game.domain.Camera;
 import com.game.domain.Car;
 import com.game.domain.CarConfig;
 import com.game.domain.Vector2;
+import com.game.domain.physics.ArcadeMayhemStrategy;
+import com.game.domain.physics.SimulationHandlingStrategy;
 import com.game.domain.physics.TireForceModel;
 import com.game.domain.physics.VehiclePhysicsEngine;
 import com.game.domain.physics.WeightTransferCalculator;
@@ -65,13 +67,17 @@ public class Main {
         inputAdapter.setTuningOverlay(tuningOverlay);
 
         // --- Physics engine (composed from domain services) ---
-        UpdateVehiclePhysicsUseCase physics = new UpdateVehiclePhysicsUseCase(
-                new VehiclePhysicsEngine(
-                        new WeightTransferCalculator(),
-                        new TireForceModel(),
-                        terrainGenerator
-                )
-        );
+        WeightTransferCalculator weightTransfer = new WeightTransferCalculator();
+        ArcadeMayhemStrategy arcadeStrategy = new ArcadeMayhemStrategy(weightTransfer);
+        SimulationHandlingStrategy simStrategy = new SimulationHandlingStrategy(
+                weightTransfer, new TireForceModel());
+
+        VehiclePhysicsEngine physicsEngine = new VehiclePhysicsEngine(
+                arcadeStrategy, terrainGenerator);
+        UpdateVehiclePhysicsUseCase physics = new UpdateVehiclePhysicsUseCase(physicsEngine);
+
+        // Wire strategy switching into the tuning overlay (M key to cycle)
+        tuningOverlay.setEngine(physicsEngine, arcadeStrategy, simStrategy);
 
         // --- Game loop ---
         GameLoop gameLoop = new GameLoop(car, physics, inputAdapter, rendererAdapter, camera);

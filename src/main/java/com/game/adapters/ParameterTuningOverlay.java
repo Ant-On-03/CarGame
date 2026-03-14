@@ -4,6 +4,8 @@ import com.game.domain.Car;
 import com.game.domain.CarConfig;
 import com.game.domain.DriveType;
 import com.game.domain.Tire;
+import com.game.domain.physics.HandlingStrategy;
+import com.game.domain.physics.VehiclePhysicsEngine;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -24,7 +26,12 @@ import java.awt.geom.RoundRectangle2D;
  *   <li><b>Shift + Left/Right</b> — large step adjustment</li>
  *   <li><b>R</b> — reset selected parameter to default</li>
  *   <li><b>Shift+R</b> — reset ALL parameters to defaults</li>
+ *   <li><b>M</b> — cycle handling mode (Arcade Mayhem / Simulation)</li>
  * </ul>
+ * <p>
+ * Press <b>M</b> at any time (panel open or closed) to cycle the
+ * handling mode. The current mode is always shown as a small badge
+ * in the top-left corner of the screen.
  * <p>
  * The car continues to drive while the panel is open.
  * Changes take effect immediately — a new {@link CarConfig} record is
@@ -331,6 +338,13 @@ public class ParameterTuningOverlay implements KeyListener {
     private static final Color SEPARATOR_COLOR = new Color(60, 80, 100, 80);
     private static final Color DEFAULT_MARKER_COLOR = new Color(255, 255, 255, 60);
 
+    // Mode badge colours
+    private static final Color MODE_BADGE_BG = new Color(10, 10, 15, 200);
+    private static final Color MODE_BADGE_BORDER = new Color(60, 80, 100, 150);
+    private static final Color MODE_ARCADE_COLOR = new Color(255, 160, 40);
+    private static final Color MODE_SIMULATION_COLOR = new Color(60, 200, 120);
+    private static final Color MODE_LABEL_COLOR = new Color(140, 150, 170);
+
     // ================================================================
     // Cached fonts and strokes (avoid per-frame allocation)
     // ================================================================
@@ -339,6 +353,8 @@ public class ParameterTuningOverlay implements KeyListener {
     private static final Font PARAM_FONT = new Font("Consolas", Font.PLAIN, 12);
     private static final Font SECTION_FONT = new Font("Consolas", Font.BOLD, 11);
     private static final Font HINT_FONT = new Font("Consolas", Font.PLAIN, 10);
+    private static final Font MODE_BADGE_FONT = new Font("Consolas", Font.BOLD, 12);
+    private static final Font MODE_LABEL_FONT = new Font("Consolas", Font.PLAIN, 10);
     private static final BasicStroke BORDER_STROKE = new BasicStroke(1.0f);
 
     // ================================================================
@@ -358,9 +374,50 @@ public class ParameterTuningOverlay implements KeyListener {
     private boolean visible = false;
     private int selectedIndex = 0;
 
+    /**
+     * Physics engine reference for hot-swapping handling strategies.
+     * Nullable — mode switching is a no-op if not set.
+     */
+    private VehiclePhysicsEngine engine;
+
+    /**
+     * Pre-built strategies for instant swapping. Set via {@link #setEngine}.
+     */
+    private HandlingStrategy[] strategies;
+    private int activeStrategyIndex = 0;
+
+    /**
+     * Fade timer for the mode-change notification.
+     * When a strategy is swapped, this is set to a positive value and
+     * counts down each frame so the badge briefly enlarges/flashes.
+     */
+    private double modeChangeFlashTimer = 0.0;
+
     public ParameterTuningOverlay(Car car) {
         this.car = car;
         this.defaults = car.getConfig();
+    }
+
+    /**
+     * Sets the physics engine and its available strategies for mode switching.
+     * Must be called after construction for the M-key toggle to work.
+     *
+     * @param engine     the engine context that holds the active strategy
+     * @param strategies all available strategies, in cycle order.
+     *                   The first entry should match the engine's current strategy.
+     */
+    public void setEngine(VehiclePhysicsEngine engine, HandlingStrategy... strategies) {
+        this.engine = engine;
+        this.strategies = strategies;
+        // Find which strategy is currently active
+        HandlingStrategy current = engine.getHandlingStrategy();
+        for (int i = 0; i < strategies.length; i++) {
+            if (strategies[i] == current) {
+                activeStrategyIndex = i;
+                return;
+            }
+        }
+        activeStrategyIndex = 0;
     }
 
     public boolean isVisible() {
@@ -373,6 +430,12 @@ public class ParameterTuningOverlay implements KeyListener {
 
     @Override
     public void keyPressed(KeyEvent e) {
+        // M key cycles handling mode regardless of panel visibility
+        if (e.getKeyCode() == KeyEvent.VK_M) {
+            cycleHandlingMode();
+            return;
+        }
+
         if (e.getKeyCode() == KeyEvent.VK_TAB) {
             visible = !visible;
             return;
@@ -434,6 +497,27 @@ public class ParameterTuningOverlay implements KeyListener {
         car.setConfig(defaults);
     }
 
+    /**
+     * Cycles to the next handling strategy. No-op if engine is not wired.
+     */
+    private void cycleHandlingMode() {
+        if (engine == null || strategies == null || strategies.length < 2) {
+            return;
+        }
+        activeStrategyIndex = (activeStrategyIndex + 1) % strategies.length;
+        engine.setHandlingStrategy(strategies[activeStrategyIndex]);
+        modeChangeFlashTimer = 1.5; // flash for 1.5 seconds
+    }
+
+    /**
+     * Returns the name of the currently active handling strategy,
+     * or "Unknown" if no engine is wired.
+     */
+    public String activeModeName() {
+        if (engine == null) return "Unknown";
+        return engine.getHandlingStrategy().name();
+    }
+
     // ================================================================
     // Rendering
     // ================================================================
@@ -443,6 +527,14 @@ public class ParameterTuningOverlay implements KeyListener {
      * Called by the renderer adapter at the end of each frame.
      */
     public void draw(Graphics2D g2d, int canvasWidth, int canvasHeight) {
+        // Tick down flash timer (approximate: called once per render frame ~60Hz)
+        if (modeChangeFlashTimer > 0) {
+            modeChangeFlashTimer -= 0.016;
+        }
+
+        // Always draw the mode badge in top-left corner
+        drawModeBadge(g2d);
+
         if (!visible) return;
 
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -484,6 +576,14 @@ public class ParameterTuningOverlay implements KeyListener {
         g2d.setColor(HEADER_COLOR);
         curY += 18;
         g2d.drawString("PHYSICS TUNING", panelX + 12, curY);
+
+        // Show current mode on the right side of the header
+        String modeName = activeModeName();
+        boolean isArcade = modeName.toLowerCase().contains("arcade");
+        g2d.setFont(MODE_BADGE_FONT);
+        g2d.setColor(isArcade ? MODE_ARCADE_COLOR : MODE_SIMULATION_COLOR);
+        int modeWidth = g2d.getFontMetrics().stringWidth(modeName);
+        g2d.drawString(modeName, panelX + panelW - modeWidth - 14, curY);
 
         // Separator
         curY += 8;
@@ -569,6 +669,56 @@ public class ParameterTuningOverlay implements KeyListener {
         g2d.setFont(HINT_FONT);
         g2d.setColor(HINT_COLOR);
         g2d.drawString("UP/DOWN select  |  LEFT/RIGHT adjust  |  SHIFT = big step", panelX + 12, curY + 10);
-        g2d.drawString("R = reset param  |  SHIFT+R = reset all  |  TAB = close", panelX + 12, curY + 24);
+        g2d.drawString("R = reset  |  SHIFT+R = reset all  |  M = mode  |  TAB = close", panelX + 12, curY + 24);
+    }
+
+    // ================================================================
+    // Mode badge (always visible, top-left corner)
+    // ================================================================
+
+    /**
+     * Draws a compact badge showing the current handling mode.
+     * Always visible — even when the tuning panel is closed.
+     * Briefly flashes brighter when the mode is changed.
+     */
+    private void drawModeBadge(Graphics2D g2d) {
+        if (engine == null) return;
+
+        String modeName = activeModeName();
+        boolean isArcade = modeName.toLowerCase().contains("arcade");
+        Color modeColor = isArcade ? MODE_ARCADE_COLOR : MODE_SIMULATION_COLOR;
+
+        // Flash effect: boost alpha and scale briefly after mode change
+        float flashAlpha = 1.0f;
+        if (modeChangeFlashTimer > 0) {
+            flashAlpha = Math.min(1.0f, 0.6f + 0.4f * (float)(modeChangeFlashTimer / 1.5));
+        }
+
+        int badgeX = 12;
+        int badgeY = 12;
+
+        g2d.setFont(MODE_LABEL_FONT);
+        int labelWidth = g2d.getFontMetrics().stringWidth("MODE");
+        g2d.setFont(MODE_BADGE_FONT);
+        int nameWidth = g2d.getFontMetrics().stringWidth(modeName);
+        int badgeW = Math.max(labelWidth, nameWidth) + 20;
+        int badgeH = 38;
+
+        // Background
+        g2d.setColor(new Color(10, 10, 15, (int)(200 * flashAlpha)));
+        g2d.fillRoundRect(badgeX, badgeY, badgeW, badgeH, 8, 8);
+        g2d.setColor(modeChangeFlashTimer > 0 ? modeColor : MODE_BADGE_BORDER);
+        g2d.setStroke(BORDER_STROKE);
+        g2d.drawRoundRect(badgeX, badgeY, badgeW, badgeH, 8, 8);
+
+        // "MODE" label
+        g2d.setFont(MODE_LABEL_FONT);
+        g2d.setColor(MODE_LABEL_COLOR);
+        g2d.drawString("MODE [M]", badgeX + 10, badgeY + 14);
+
+        // Strategy name
+        g2d.setFont(MODE_BADGE_FONT);
+        g2d.setColor(modeColor);
+        g2d.drawString(modeName, badgeX + 10, badgeY + 30);
     }
 }

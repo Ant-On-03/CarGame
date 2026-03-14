@@ -7,7 +7,7 @@ import com.game.domain.ControlInput;
 import com.game.domain.SurfaceType;
 import com.game.domain.Vector2;
 import com.game.domain.Wheel;
-import com.game.domain.physics.TireForceModel;
+import com.game.domain.physics.ArcadeMayhemStrategy;
 import com.game.domain.physics.VehiclePhysicsEngine;
 import com.game.domain.physics.WeightTransferCalculator;
 
@@ -137,8 +137,7 @@ public class ConsoleSimulationRunner {
         // No-op terrain provider: always returns TARMAC for headless simulation
         return new UpdateVehiclePhysicsUseCase(
                 new VehiclePhysicsEngine(
-                        new WeightTransferCalculator(),
-                        new TireForceModel(),
+                        new ArcadeMayhemStrategy(new WeightTransferCalculator()),
                         (x, y) -> SurfaceType.TARMAC
                 )
         );

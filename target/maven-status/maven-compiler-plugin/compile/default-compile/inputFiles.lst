@@ -10,8 +10,10 @@ C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\co
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\ports\WheelRenderData.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\DriveType.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\ControlInput.java
+C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\HandlingStrategy.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\adapters\ProceduralTerrainGenerator.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\main\Main.java
+C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\ArcadeMayhemStrategy.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\adapters\KeyboardInputAdapter.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\adapters\Java2DRendererAdapter.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\CarConfig.java
@@ -22,5 +24,6 @@ C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\co
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\WeightTransferCalculator.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\Car.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\ports\InputProvider.java
+C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\SimulationHandlingStrategy.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\application\UpdateVehiclePhysicsUseCase.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\Tire.java
