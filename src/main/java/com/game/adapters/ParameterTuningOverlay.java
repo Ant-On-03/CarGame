@@ -155,14 +155,28 @@ public class ParameterTuningOverlay implements KeyListener {
         // ---- Config builders ----
 
         private static CarConfig withVehicle(CarConfig c, double mass, double wb, double tw, double cg) {
-            return new CarConfig(mass, wb, tw, cg, c.bodyLength(), c.bodyWidth(),
+            // Auto-scale body dimensions to keep wheels proportional
+            double newBodyWidth = tw / TRACK_TO_BODY_W;
+            double newBodyLength = wb / WHEELBASE_TO_BODY_L;
+            return new CarConfig(mass, wb, tw, cg, newBodyLength, newBodyWidth,
                     c.maxSteeringAngle(), c.engineForce(), c.brakeForce(), c.driveType(),
                     c.dragCoefficient(), c.rollingResistance(), c.angularDamping(),
                     c.steeringAssistTorque(), c.frontTire(), c.rearTire());
         }
 
+        /**
+         * Fixed ratio: trackWidth = bodyWidth * TRACK_TO_BODY_W,
+         *              wheelbase  = bodyLength * WHEELBASE_TO_BODY_L.
+         * Calibrated from driftTuned(): 1.4/1.6 and 2.0/3.5.
+         */
+        private static final double TRACK_TO_BODY_W = 0.875;
+        private static final double WHEELBASE_TO_BODY_L = 2.0 / 3.5;
+
         private static CarConfig withBody(CarConfig c, double bodyLength, double bodyWidth) {
-            return new CarConfig(c.mass(), c.wheelbase(), c.trackWidth(), c.cgHeight(),
+            // Auto-scale chassis dimensions so wheels move with body
+            double newTrackWidth = bodyWidth * TRACK_TO_BODY_W;
+            double newWheelbase = bodyLength * WHEELBASE_TO_BODY_L;
+            return new CarConfig(c.mass(), newWheelbase, newTrackWidth, c.cgHeight(),
                     bodyLength, bodyWidth, c.maxSteeringAngle(), c.engineForce(),
                     c.brakeForce(), c.driveType(), c.dragCoefficient(), c.rollingResistance(),
                     c.angularDamping(), c.steeringAssistTorque(), c.frontTire(), c.rearTire());

@@ -28,16 +28,6 @@ public class GameLoop implements Runnable {
     /** Conversion factor from physics metres to screen pixels. */
     static final double PIXELS_PER_METER = 8.0;
 
-    /**
-     * Wheel visual position as a fraction of half the body width/length.
-     * Calibrated from default CarConfig: trackWidth=1.4 / bodyWidth=1.6 → 0.4375,
-     * wheelbase=2.0 / bodyLength=3.5 → 0.2857.
-     * This ensures wheels scale visually when body dimensions change in the tuning panel,
-     * while physics positions (trackWidth/wheelbase) remain independent.
-     */
-    private static final double WHEEL_X_BODY_FRACTION = 0.4375;
-    private static final double WHEEL_Y_BODY_FRACTION = 0.2857;
-
     private final Car car;
     private final UpdateVehiclePhysicsUseCase physics;
     private final InputProvider input;
