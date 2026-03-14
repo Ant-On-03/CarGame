@@ -43,34 +43,34 @@ public class ParameterTuningOverlay implements KeyListener {
      */
     enum TunableParam {
         // -- Vehicle --
-        MASS("Mass", "kg", 200, 3000, 50, 10),
-        WHEELBASE("Wheelbase", "m", 1.0, 5.0, 0.1, 0.02),
-        TRACK_WIDTH("Track Width", "m", 0.8, 3.0, 0.1, 0.02),
-        CG_HEIGHT("CG Height", "m", 0.1, 1.5, 0.05, 0.01),
-        BODY_LENGTH("Body Length", "m", 2.0, 6.0, 0.25, 0.05),
-        BODY_WIDTH("Body Width", "m", 1.0, 3.0, 0.1, 0.02),
+        MASS("Mass", "kg", 200, 20000, 50, 10),
+        WHEELBASE("Wheelbase", "m", 1.0, 12.0, 0.25, 0.05),
+        TRACK_WIDTH("Track Width", "m", 0.8, 4.0, 0.1, 0.02),
+        CG_HEIGHT("CG Height", "m", 0.1, 2.5, 0.05, 0.01),
+        BODY_LENGTH("Body Length", "m", 2.0, 18.0, 0.5, 0.1),
+        BODY_WIDTH("Body Width", "m", 1.0, 5.0, 0.1, 0.02),
 
         // -- Power --
         DRIVE_TYPE("Drive Type", "", 0, 2, 1, 1),
-        ENGINE_FORCE("Engine Force", "N", 5000, 200000, 5000, 1000),
-        BRAKE_FORCE("Brake Force", "N", 2000, 80000, 2000, 500),
+        ENGINE_FORCE("Engine Force", "N", 5000, 800000, 5000, 1000),
+        BRAKE_FORCE("Brake Force", "N", 2000, 400000, 2000, 500),
         MAX_STEERING("Max Steering", "deg", 10, 90, 5, 1),
 
         // -- Drag/Resistance --
-        DRAG_COEFF("Drag Coefficient", "", 0.0, 5.0, 0.1, 0.02),
-        ROLLING_RES("Rolling Resistance", "N", 0, 500, 10, 2),
-        ANGULAR_DAMP("Angular Damping", "", 0, 500, 10, 2),
-        STEERING_ASSIST("Steering Assist", "N-m", 0, 50000, 1000, 200),
+        DRAG_COEFF("Drag Coefficient", "", 0.0, 10.0, 0.1, 0.02),
+        ROLLING_RES("Rolling Resistance", "N", 0, 2000, 10, 2),
+        ANGULAR_DAMP("Angular Damping", "", 0, 5000, 25, 5),
+        STEERING_ASSIST("Steering Assist", "N-m", 0, 500000, 2500, 500),
 
         // -- Front Tire --
         FRONT_FRICTION("Front Friction (mu)", "", 0.3, 3.0, 0.1, 0.02),
         FRONT_DYN_RATIO("Front Dynamic Ratio", "", 0.2, 1.0, 0.05, 0.01),
-        FRONT_CORNERING("Front Cornering Stiff", "N/rad", 10000, 1000000, 10000, 2000),
+        FRONT_CORNERING("Front Cornering Stiff", "N/rad", 10000, 5000000, 10000, 2000),
 
         // -- Rear Tire --
         REAR_FRICTION("Rear Friction (mu)", "", 0.3, 3.0, 0.1, 0.02),
         REAR_DYN_RATIO("Rear Dynamic Ratio", "", 0.2, 1.0, 0.05, 0.01),
-        REAR_CORNERING("Rear Cornering Stiff", "N/rad", 1000, 1000000, 5000, 1000);
+        REAR_CORNERING("Rear Cornering Stiff", "N/rad", 1000, 5000000, 5000, 1000);
 
         final String displayName;
         final String unit;
@@ -158,10 +158,32 @@ public class ParameterTuningOverlay implements KeyListener {
             // Auto-scale body dimensions to keep wheels proportional
             double newBodyWidth = tw / TRACK_TO_BODY_W;
             double newBodyLength = wb / WHEELBASE_TO_BODY_L;
+
+            // When wheelbase or trackWidth change, also scale cornering stiffness,
+            // angular damping, and steering assist to match the new size.
+            double areaRatio = (newBodyLength * newBodyWidth) / REF_AREA;
+            double massRatio = mass / REF_MASS;
+
+            double newMoI = mass * (newBodyLength * newBodyLength + newBodyWidth * newBodyWidth) / 12.0;
+            double refMoI = REF_MASS * (REF_LENGTH * REF_LENGTH + REF_WIDTH * REF_WIDTH) / 12.0;
+            double moiRatio = newMoI / refMoI;
+
+            // Cornering stiffness scales with mass
+            double newFrontCornering = REF_FRONT_CORNERING * massRatio;
+            double newRearCornering = REF_REAR_CORNERING * massRatio;
+            Tire newFrontTire = new Tire(c.frontTire().frictionCoefficient(),
+                    c.frontTire().dynamicFrictionRatio(), newFrontCornering);
+            Tire newRearTire = new Tire(c.rearTire().frictionCoefficient(),
+                    c.rearTire().dynamicFrictionRatio(), newRearCornering);
+
+            // Angular damping and steering assist scale with moment of inertia
+            double newAngularDamp = REF_ANGULAR_DAMP * moiRatio;
+            double newSteeringAssist = REF_STEERING_ASSIST * moiRatio;
+
             return new CarConfig(mass, wb, tw, cg, newBodyLength, newBodyWidth,
                     c.maxSteeringAngle(), c.engineForce(), c.brakeForce(), c.driveType(),
-                    c.dragCoefficient(), c.rollingResistance(), c.angularDamping(),
-                    c.steeringAssistTorque(), c.frontTire(), c.rearTire());
+                    c.dragCoefficient(), c.rollingResistance(), newAngularDamp,
+                    newSteeringAssist, newFrontTire, newRearTire);
         }
 
         /**
@@ -172,14 +194,71 @@ public class ParameterTuningOverlay implements KeyListener {
         private static final double TRACK_TO_BODY_W = 0.875;
         private static final double WHEELBASE_TO_BODY_L = 2.0 / 3.5;
 
+        // Reference values from driftTuned() for proportional scaling
+        private static final double REF_LENGTH = 3.5;
+        private static final double REF_WIDTH = 1.6;
+        private static final double REF_AREA = REF_LENGTH * REF_WIDTH;   // 5.6 m²
+        private static final double REF_MASS = 800.0;
+        private static final double REF_CG_HEIGHT = 0.40;
+        private static final double REF_ENGINE = 80000.0;
+        private static final double REF_BRAKE = 20000.0;
+        private static final double REF_DRAG = 0.8;
+        private static final double REF_ROLLING_RES = 60.0;
+        private static final double REF_ANGULAR_DAMP = 50.0;
+        private static final double REF_STEERING_ASSIST = 15000.0;
+        private static final double REF_FRONT_CORNERING = 300000.0;
+        private static final double REF_REAR_CORNERING = 40000.0;
+
         private static CarConfig withBody(CarConfig c, double bodyLength, double bodyWidth) {
             // Auto-scale chassis dimensions so wheels move with body
             double newTrackWidth = bodyWidth * TRACK_TO_BODY_W;
             double newWheelbase = bodyLength * WHEELBASE_TO_BODY_L;
-            return new CarConfig(c.mass(), newWheelbase, newTrackWidth, c.cgHeight(),
-                    bodyLength, bodyWidth, c.maxSteeringAngle(), c.engineForce(),
-                    c.brakeForce(), c.driveType(), c.dragCoefficient(), c.rollingResistance(),
-                    c.angularDamping(), c.steeringAssistTorque(), c.frontTire(), c.rearTire());
+
+            // Compute scaling ratios
+            double areaRatio = (bodyLength * bodyWidth) / REF_AREA;     // mass, engine, brake, rolling res
+            double widthRatio = bodyWidth / REF_WIDTH;                  // drag (frontal area)
+            double lengthRatio = bodyLength / REF_LENGTH;               // CG height grows gently with length
+
+            // Mass scales linearly with footprint area (bigger car = heavier)
+            double newMass = REF_MASS * areaRatio;
+
+            // CG height: taller vehicles are longer; gentle sqrt scaling
+            double newCgHeight = REF_CG_HEIGHT * Math.sqrt(Math.max(areaRatio, 0.25));
+
+            // Engine & brake force scale with mass to maintain similar acceleration
+            double newEngine = REF_ENGINE * areaRatio;
+            double newBrake = REF_BRAKE * areaRatio;
+
+            // Drag coefficient scales with frontal area (width)
+            double newDrag = REF_DRAG * widthRatio;
+
+            // Rolling resistance scales with mass (weight on tires)
+            double newRollingRes = REF_ROLLING_RES * areaRatio;
+
+            // Angular damping must scale with moment of inertia to keep similar yaw damping ratio.
+            // MoI ∝ mass * (L² + W²). Compute the ratio of new MoI to reference MoI.
+            double refMoI = REF_MASS * (REF_LENGTH * REF_LENGTH + REF_WIDTH * REF_WIDTH) / 12.0;
+            double newMoI = newMass * (bodyLength * bodyLength + bodyWidth * bodyWidth) / 12.0;
+            double moiRatio = newMoI / refMoI;
+            double newAngularDamp = REF_ANGULAR_DAMP * moiRatio;
+
+            // Steering assist scales with MoI so the car turns at a consistent rate
+            double newSteeringAssist = REF_STEERING_ASSIST * moiRatio;
+
+            // Cornering stiffness scales with mass (more weight = bigger contact patches)
+            double newFrontCornering = REF_FRONT_CORNERING * areaRatio;
+            double newRearCornering = REF_REAR_CORNERING * areaRatio;
+
+            // Preserve friction coefficients and dynamic ratios (surface property, not size-dependent)
+            Tire newFrontTire = new Tire(c.frontTire().frictionCoefficient(),
+                    c.frontTire().dynamicFrictionRatio(), newFrontCornering);
+            Tire newRearTire = new Tire(c.rearTire().frictionCoefficient(),
+                    c.rearTire().dynamicFrictionRatio(), newRearCornering);
+
+            return new CarConfig(newMass, newWheelbase, newTrackWidth, newCgHeight,
+                    bodyLength, bodyWidth, c.maxSteeringAngle(), newEngine, newBrake,
+                    c.driveType(), newDrag, newRollingRes, newAngularDamp,
+                    newSteeringAssist, newFrontTire, newRearTire);
         }
 
         private static CarConfig withDrive(CarConfig c, double engine, double brake, double steer) {
