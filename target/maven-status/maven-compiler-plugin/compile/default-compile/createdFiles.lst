@@ -4,10 +4,12 @@ com\game\adapters\KeyboardInputAdapter.class
 com\game\main\Main$1.class
 com\game\application\UpdateVehiclePhysicsUseCase.class
 com\game\domain\physics\VehiclePhysicsEngine$WheelForceResult.class
+com\game\adapters\ParameterTuningOverlay.class
 com\game\domain\Wheel.class
 com\game\domain\physics\VehiclePhysicsEngine.class
 com\game\ports\InputProvider.class
 com\game\adapters\Java2DRendererAdapter.class
+com\game\adapters\ParameterTuningOverlay$TunableParam.class
 com\game\ports\Renderer.class
 com\game\domain\physics\TireForceModel.class
 com\game\domain\Car.class

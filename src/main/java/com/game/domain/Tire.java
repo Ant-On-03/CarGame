@@ -16,11 +16,11 @@ public record Tire(
 ) {
 
     public static Tire gripFront() {
-        return new Tire(1.3, 0.75, 200_000);
+        return new Tire(1.5, 0.75, 300_000);
     }
 
     public static Tire driftRear() {
-        return new Tire(1.15, 0.65, 160_000);
+        return new Tire(2.0, 0.65, 40_000);
     }
 
     /**

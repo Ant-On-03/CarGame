@@ -1,5 +1,6 @@
 package com.game.domain;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,7 +19,7 @@ public class Car {
     private double rotation;
     private double angularVelocity;
 
-    private final CarConfig config;
+    private CarConfig config;
     private final List<Wheel> wheels;
 
     public Car(Vector2 position, CarConfig config) {
@@ -36,7 +37,7 @@ public class Car {
         double halfTrack = config.trackWidth() / 2.0;
         double halfWheelbase = config.wheelbase() / 2.0;
 
-        return List.of(
+        return new ArrayList<>(List.of(
                 new Wheel(WheelPosition.FRONT_LEFT,
                         new Vector2(-halfTrack, -halfWheelbase), config.frontTire()),
                 new Wheel(WheelPosition.FRONT_RIGHT,
@@ -45,7 +46,7 @@ public class Car {
                         new Vector2(-halfTrack, halfWheelbase), config.rearTire()),
                 new Wheel(WheelPosition.REAR_RIGHT,
                         new Vector2(halfTrack, halfWheelbase), config.rearTire())
-        );
+        ));
     }
 
     // ---- Derived vectors ----
@@ -111,6 +112,25 @@ public class Car {
 
     public CarConfig getConfig() {
         return config;
+    }
+
+    /**
+     * Replaces the car configuration at runtime.
+     * <p>
+     * Wheels are re-created to reflect the new wheelbase and track width.
+     * Existing velocity and angular velocity are preserved.
+     */
+    public void setConfig(CarConfig newConfig) {
+        this.config = newConfig;
+        // Rebuild wheel layout from new dimensions
+        List<Wheel> newWheels = createWheels(newConfig);
+        // Copy over runtime state (normal forces, slip) from old wheels
+        for (int i = 0; i < Math.min(wheels.size(), newWheels.size()); i++) {
+            newWheels.get(i).setNormalForce(wheels.get(i).getNormalForce());
+            newWheels.get(i).setSlipping(wheels.get(i).isSlipping());
+        }
+        wheels.clear();
+        wheels.addAll(newWheels);
     }
 
     public List<Wheel> getWheels() {

@@ -11,6 +11,7 @@ C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\co
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\TireForceResult.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\physics\WeightTransferCalculator.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\ports\Renderer.java
+C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\adapters\ParameterTuningOverlay.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\ports\WheelRenderData.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\DriveType.java
 C:\Users\AntonLinaresLopez\Documents\SideProyect\CarGamePhysics\src\main\java\com\game\domain\Car.java

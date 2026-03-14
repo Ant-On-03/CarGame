@@ -21,27 +21,72 @@ import com.game.ports.WheelRenderData;
  */
 public class GameLoop implements Runnable {
 
-    private static final double PHYSICS_DT = 1.0 / 120.0;
+    private static final int DEFAULT_PHYSICS_HZ = 120;
     private static final long TARGET_FRAME_NS = 16_666_667L; // ~60 FPS cap
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
 
     /** Conversion factor from physics metres to screen pixels. */
     static final double PIXELS_PER_METER = 8.0;
 
+    /**
+     * Wheel visual position as a fraction of half the body width/length.
+     * Calibrated from default CarConfig: trackWidth=1.4 / bodyWidth=1.6 → 0.4375,
+     * wheelbase=2.0 / bodyLength=3.5 → 0.2857.
+     * This ensures wheels scale visually when body dimensions change in the tuning panel,
+     * while physics positions (trackWidth/wheelbase) remain independent.
+     */
+    private static final double WHEEL_X_BODY_FRACTION = 0.4375;
+    private static final double WHEEL_Y_BODY_FRACTION = 0.2857;
+
     private final Car car;
     private final UpdateVehiclePhysicsUseCase physics;
     private final InputProvider input;
     private final Renderer renderer;
+    private final double physicsDt;
 
     private volatile boolean running;
     private ControlInput lastControlInput = ControlInput.NONE;
 
+    /**
+     * Creates a game loop with the default physics tick rate (120 Hz).
+     * Override via system property {@code -Dphysics.hz=60} for weaker hardware.
+     */
     public GameLoop(Car car, UpdateVehiclePhysicsUseCase physics,
                     InputProvider input, Renderer renderer) {
+        this(car, physics, input, renderer, resolvePhysicsHz());
+    }
+
+    /**
+     * Creates a game loop with an explicit physics tick rate.
+     *
+     * @param physicsHz physics updates per second (e.g. 60 or 120)
+     */
+    public GameLoop(Car car, UpdateVehiclePhysicsUseCase physics,
+                    InputProvider input, Renderer renderer, int physicsHz) {
         this.car = car;
         this.physics = physics;
         this.input = input;
         this.renderer = renderer;
+        this.physicsDt = 1.0 / physicsHz;
+    }
+
+    /**
+     * Reads desired physics tick rate from the {@code physics.hz} system property.
+     * Falls back to {@value #DEFAULT_PHYSICS_HZ} if not set or invalid.
+     */
+    private static int resolvePhysicsHz() {
+        String prop = System.getProperty("physics.hz");
+        if (prop != null) {
+            try {
+                int hz = Integer.parseInt(prop.trim());
+                if (hz >= 30 && hz <= 240) {
+                    return hz;
+                }
+            } catch (NumberFormatException ignored) {
+                // fall through to default
+            }
+        }
+        return DEFAULT_PHYSICS_HZ;
     }
 
     @Override
@@ -71,9 +116,9 @@ public class GameLoop implements Runnable {
             lastControlInput = controlInput;
 
             // Fixed-timestep physics updates
-            while (accumulator >= PHYSICS_DT) {
-                physics.execute(car, controlInput, PHYSICS_DT);
-                accumulator -= PHYSICS_DT;
+            while (accumulator >= physicsDt) {
+                physics.execute(car, controlInput, physicsDt);
+                accumulator -= physicsDt;
             }
 
             wrapAroundScreen();

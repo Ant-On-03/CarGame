@@ -63,14 +63,14 @@ public record CarConfig(
                 0.40,                       // cgHeight (m)
                 3.5,                        // bodyLength (m)
                 1.6,                        // bodyWidth (m)
-                Math.toRadians(65),         // maxSteeringAngle — extreme, go-kart feel
-                16000.0,                    // engineForce (N) — strong acceleration
-                16000.0,                    // brakeForce (N)
+                Math.toRadians(75),         // maxSteeringAngle — nearly full lock
+                80000.0,                    // engineForce (N) — absurd power, overpowers everything
+                20000.0,                    // brakeForce (N)
                 DriveType.RWD,
-                1.2,                        // dragCoefficient — low drag, high top speed
-                100.0,                      // rollingResistance (N)
-                100.0,                      // angularDamping (N-m-s/rad) — minimal, instant yaw
-                8000.0,                     // steeringAssistTorque (N-m) — arcade feel
+                0.8,                        // dragCoefficient — minimal drag, insane top speed
+                60.0,                       // rollingResistance (N)
+                50.0,                       // angularDamping (N-m-s/rad) — almost zero, razor sharp yaw
+                15000.0,                    // steeringAssistTorque (N-m) — massive assist
                 Tire.gripFront(),
                 Tire.driftRear()
         );

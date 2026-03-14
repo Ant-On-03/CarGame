@@ -2,6 +2,7 @@ package com.game.main;
 
 import com.game.adapters.Java2DRendererAdapter;
 import com.game.adapters.KeyboardInputAdapter;
+import com.game.adapters.ParameterTuningOverlay;
 import com.game.application.UpdateVehiclePhysicsUseCase;
 import com.game.domain.Car;
 import com.game.domain.CarConfig;
@@ -48,6 +49,12 @@ public class Main {
         double startY = (WINDOW_HEIGHT / GameLoop.PIXELS_PER_METER) / 2.0;
         Car car = new Car(new Vector2(startX, startY), config);
 
+        // --- Parameter tuning overlay (Tab to toggle) ---
+        ParameterTuningOverlay tuningOverlay = new ParameterTuningOverlay(car);
+        rendererAdapter.setTuningOverlay(tuningOverlay);
+        rendererAdapter.addKeyListener(tuningOverlay);
+        inputAdapter.setTuningOverlay(tuningOverlay);
+
         // --- Physics engine (composed from domain services) ---
         UpdateVehiclePhysicsUseCase physics = new UpdateVehiclePhysicsUseCase(
                 new VehiclePhysicsEngine(
@@ -84,6 +91,8 @@ public class Main {
         canvas.setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
         canvas.addKeyListener(input);
         canvas.setFocusable(true);
+        // Disable default focus traversal so Tab reaches our KeyListeners
+        canvas.setFocusTraversalKeysEnabled(false);
 
         frame.add(canvas);
         frame.pack();
