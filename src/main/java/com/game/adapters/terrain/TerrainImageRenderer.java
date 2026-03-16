@@ -92,7 +92,6 @@ public final class TerrainImageRenderer implements TerrainImageProvider {
         int cellPx = config.cellSizePixels();
         int cellsPerChunk = config.cellsPerChunk();
         int bands = config.parallaxBands();
-        int elevLevels = config.elevationLevels();
         double ppm = config.pixelsPerMetre();
 
         double chunkWorldX = chunkX * config.chunkSizeMetres();

@@ -317,7 +317,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         double viewBottomM = cameraWorldY + (screenH / 2.0) / ppm;
 
         double chunkSize = trc.chunkSizeMetres();
-        int chunkPx = trc.chunkSizePixels();
+        // Screen-space chunk size (may differ from image native resolution)
+        int screenChunkPx = (int) (chunkSize * ppm);
 
         int minChunkX = (int) Math.floor(viewLeftM / chunkSize);
         int maxChunkX = (int) Math.floor(viewRightM / chunkSize);
@@ -331,6 +332,10 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         double screenCenterY = screenH / 2.0;
 
         double parallaxScaleFactor = trc.parallaxScaleFactor();
+
+        // Bilinear interpolation for smooth upscaling of half-res terrain images
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
         // Draw terrain layers bottom → top
         for (int z = 0; z < trc.maxLayers(); z++) {
@@ -347,24 +352,30 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
                 for (int cx = minChunkX; cx <= maxChunkX; cx++) {
 
                     BufferedImage[] layers = terrainImageProvider.getChunkImages(cx, cy);
+                    if (layers == null)
+                        continue;
                     BufferedImage layerImage = layers[z];
 
-                    // Skip empty layers
                     if (layerImage != null) {
-
                         double chunkWorldPxX = cx * chunkSize * ppm;
                         double chunkWorldPxY = cy * chunkSize * ppm;
 
                         int screenX = (int) (chunkWorldPxX + offsetX);
                         int screenY = (int) (chunkWorldPxY + offsetY);
 
-                        g2d.drawImage(layerImage, screenX, screenY, chunkPx, chunkPx, null);
+                        // Upscale from image resolution to screen size
+                        g2d.drawImage(layerImage, screenX, screenY,
+                                screenChunkPx, screenChunkPx, null);
                     }
                 }
             }
 
             g2d.setTransform(savedTransform);
         }
+
+        // Reset interpolation
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
 
         // Evict distant chunks periodically
         terrainImageProvider.evictDistantChunks(cameraWorldX, cameraWorldY);
