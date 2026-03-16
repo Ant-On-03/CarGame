@@ -63,9 +63,12 @@ public class SimulationHandlingStrategy implements HandlingStrategy {
         Vector2 forward = car.forwardVector();
 
         // Weight transfer → normal forces
+        // Weight transfer still distributes normal forces (affects grip budgets)
         double longAccel = estimateLongAccel(car, input, cfg);
         double latAccel = estimateLatAccel(car, forward);
-        weightTransfer.distribute(car, longAccel, latAccel);
+
+        // Add 'dt' as the 4th argument here!
+        weightTransfer.distribute(car, longAccel, latAccel, dt);
 
         // Speed-sensitive steering
         double speed = car.getSpeed();

@@ -109,7 +109,9 @@ public class ArcadeMayhemStrategy implements HandlingStrategy {
         // Weight transfer still distributes normal forces (affects grip budgets)
         double longAccel = estimateLongAccel(car, input, cfg);
         double latAccel = estimateLatAccel(car, forward);
-        weightTransfer.distribute(car, longAccel, latAccel);
+
+        // Add 'dt' as the 4th argument here!
+        weightTransfer.distribute(car, longAccel, latAccel, dt);
 
         // Speed-sensitive steering
         double speed = car.getSpeed();

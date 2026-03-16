@@ -692,8 +692,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         // --- 3D CABIN GEOMETRY ---
 
         // 1. Base footprint (attached to the car body, NO shift)
-        double baseW = width * 0.60;
-        double baseL = length * 0.45;
+        double baseW = width * 0.80;
+        double baseL = length * 0.65;
         double baseY = -length * 0.05 - baseL / 2;
 
         double baseFLx = -baseW / 2;  double baseFLy = baseY;           // Front-Left
@@ -777,7 +777,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         // Draw the outline around the roof
         g2d.draw(reusableRoundRect);
     }
-    
+
 
     // ================================================================
     // HUD (cached fonts and colors — drawn in screen space)

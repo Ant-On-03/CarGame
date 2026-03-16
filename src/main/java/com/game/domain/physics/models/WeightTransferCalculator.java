@@ -24,25 +24,44 @@ import com.game.domain.vehicle.Wheel;
  *   <li>latAccel &gt; 0 (accelerating rightward) → weight shifts to left (outside)</li>
  * </ul>
  */
+
+
 public class WeightTransferCalculator {
 
     private static final double GRAVITY = 9.81;
 
+    // --- Suspension State ---
+    private double smoothedLongAccel = 0.0;
+    private double smoothedLatAccel = 0.0;
+
+    // How fast the chassis responds to G-forces.
+    // 12.0 = Stiff sports car (fast weight transfer)
+    // 4.0 = Soft bouncy truck (slow weight transfer)
+    private static final double SUSPENSION_RESPONSE = 8.0;
+
     /**
      * Distributes normal forces to all four wheels of the car.
      *
-     * @param car       the vehicle whose wheels will be updated
-     * @param longAccel estimated longitudinal acceleration (m/s^2, positive = forward)
-     * @param latAccel  estimated lateral acceleration (m/s^2, positive = rightward)
+     * @param car             the vehicle whose wheels will be updated
+     * @param targetLongAccel estimated longitudinal acceleration (m/s^2)
+     * @param targetLatAccel  estimated lateral acceleration (m/s^2)
+     * @param dt              time step in seconds for frame-rate independent smoothing
      */
-    public void distribute(Car car, double longAccel, double latAccel) {
+    public void distribute(Car car, double targetLongAccel, double targetLatAccel, double dt) {
+
+        // Frame-rate independent exponential smoothing to simulate suspension lag
+        double factor = 1.0 - Math.exp(-SUSPENSION_RESPONSE * dt);
+        smoothedLongAccel += (targetLongAccel - smoothedLongAccel) * factor;
+        smoothedLatAccel += (targetLatAccel - smoothedLatAccel) * factor;
+
         CarConfig cfg = car.getConfig();
 
         double totalWeight = cfg.mass() * GRAVITY;
         double baseLoad = totalWeight / 4.0;
 
-        double longTransfer = computeLongitudinalTransfer(cfg, longAccel);
-        double latTransfer = computeLateralTransfer(cfg, latAccel);
+        // Calculate transfer using the SMOOTHED accelerations
+        double longTransfer = computeLongitudinalTransfer(cfg, smoothedLongAccel);
+        double latTransfer = computeLateralTransfer(cfg, smoothedLatAccel);
 
         for (Wheel wheel : car.getWheels()) {
             double load = baseLoad;
