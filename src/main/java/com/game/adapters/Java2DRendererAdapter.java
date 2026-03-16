@@ -1,6 +1,8 @@
 package com.game.adapters;
 
 import com.game.ports.Renderer;
+import com.game.ports.TerrainImageProvider;
+import com.game.ports.TerrainRenderConfig;
 import com.game.ports.WheelRenderData;
 
 import java.awt.BasicStroke;
@@ -129,12 +131,14 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     /** Optional tuning overlay drawn on top of everything. */
     private ParameterTuningOverlay tuningOverlay;
 
-    /** Terrain generator for drawing chunks (set via setTerrainGenerator). */
-    private ProceduralTerrainGenerator terrainGenerator;
+    /**
+     * Terrain image provider for drawing chunks (set via setTerrainImageProvider).
+     */
+    private TerrainImageProvider terrainImageProvider;
 
     // ---- Camera state (set each frame via setCamera) ----
-    private double cameraWorldX;   // camera centre in metres
-    private double cameraWorldY;   // camera centre in metres
+    private double cameraWorldX; // camera centre in metres
+    private double cameraWorldY; // camera centre in metres
     private double pixelsPerMeter = 8.0;
 
     // ---- Cached car shapes (rebuilt only when dimensions change) ----
@@ -174,9 +178,9 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         this.tuningOverlay = overlay;
     }
 
-    /** Sets the terrain generator for chunk rendering. */
-    public void setTerrainGenerator(ProceduralTerrainGenerator generator) {
-        this.terrainGenerator = generator;
+    /** Sets the terrain image provider for chunk rendering. */
+    public void setTerrainImageProvider(TerrainImageProvider provider) {
+        this.terrainImageProvider = provider;
     }
 
     // ================================================================
@@ -215,7 +219,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
 
     @Override
     public void drawCar(double x, double y, double rotation, double width, double length,
-                        double velocity, WheelRenderData[] wheels) {
+            double velocity, WheelRenderData[] wheels) {
         recordTireMarks(wheels);
 
         // Enable AA only for the car (the detailed part)
@@ -296,8 +300,10 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
      * that overlap the current viewport and blits their pre-rendered images.
      */
     private void drawTerrainChunks() {
-        if (terrainGenerator == null) return;
+        if (terrainImageProvider == null)
+            return;
 
+        TerrainRenderConfig trc = terrainImageProvider.getRenderConfig();
         double ppm = pixelsPerMeter;
         int screenW = getWidth();
         int screenH = getHeight();
@@ -310,8 +316,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         double viewRightM = cameraWorldX + (screenW / 2.0) / ppm;
         double viewBottomM = cameraWorldY + (screenH / 2.0) / ppm;
 
-        double chunkSize = ProceduralTerrainGenerator.CHUNK_SIZE_METRES;
-        int chunkPx = ProceduralTerrainGenerator.CHUNK_SIZE_PIXELS;
+        double chunkSize = trc.chunkSizeMetres();
+        int chunkPx = trc.chunkSizePixels();
 
         int minChunkX = (int) Math.floor(viewLeftM / chunkSize);
         int maxChunkX = (int) Math.floor(viewRightM / chunkSize);
@@ -324,11 +330,10 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         double screenCenterX = screenW / 2.0;
         double screenCenterY = screenH / 2.0;
 
-        // Parallax intensity
-        double parallaxScaleFactor = 0.05;
+        double parallaxScaleFactor = trc.parallaxScaleFactor();
 
         // Draw terrain layers bottom → top
-        for (int z = 0; z < ProceduralTerrainGenerator.MAX_POSSIBLE_LAYERS; z++) {
+        for (int z = 0; z < trc.maxLayers(); z++) {
 
             double layerScale = 1.0 + (z * parallaxScaleFactor);
             java.awt.geom.AffineTransform savedTransform = g2d.getTransform();
@@ -341,7 +346,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
             for (int cy = minChunkY; cy <= maxChunkY; cy++) {
                 for (int cx = minChunkX; cx <= maxChunkX; cx++) {
 
-                    BufferedImage[] layers = terrainGenerator.getChunkImages(cx, cy);
+                    BufferedImage[] layers = terrainImageProvider.getChunkImages(cx, cy);
                     BufferedImage layerImage = layers[z];
 
                     // Skip empty layers
@@ -362,7 +367,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         }
 
         // Evict distant chunks periodically
-        terrainGenerator.evictDistantChunks(cameraWorldX, cameraWorldY);
+        terrainImageProvider.evictDistantChunks(cameraWorldX, cameraWorldY);
     }
 
     // ================================================================
@@ -384,7 +389,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     // ================================================================
 
     private void recordTireMarks(WheelRenderData[] wheels) {
-        if (wheels == null) return;
+        if (wheels == null)
+            return;
         for (int i = 0; i < wheels.length; i++) {
             WheelRenderData w = wheels[i];
             if (w.slipping()) {
@@ -410,13 +416,15 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
      * Instead of setting a new Color per mark (2000 Color objects),
      * marks are sorted into {@value #TIRE_MARK_ALPHA_BUCKETS} alpha buckets.
      * Color is set once per bucket, then all lines in that bucket are drawn.
-     * Total Color lookups: 16 (from pre-computed table) instead of 2000 allocations.
+     * Total Color lookups: 16 (from pre-computed table) instead of 2000
+     * allocations.
      * <p>
      * Tire marks are stored in world-pixel coordinates and drawn with the
      * camera transform already applied.
      */
     private void drawTireMarks() {
-        if (tireMarks.isEmpty()) return;
+        if (tireMarks.isEmpty())
+            return;
 
         // Clear buckets
         for (int i = 0; i < TIRE_MARK_ALPHA_BUCKETS; i++) {
@@ -449,7 +457,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         g2d.setStroke(STROKE_TIRE_MARK);
         for (int bucket = 0; bucket < TIRE_MARK_ALPHA_BUCKETS; bucket++) {
             List<TireMark> marks = tireMarkBuckets[bucket];
-            if (marks.isEmpty()) continue;
+            if (marks.isEmpty())
+                continue;
 
             // Compute representative alpha for this bucket
             int alpha = ((bucket * 2 + 1) * TIRE_MARK_MAX_ALPHA) / (TIRE_MARK_ALPHA_BUCKETS * 2);
@@ -521,12 +530,12 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
 
         path.lineTo(noseWidth, -halfL + hoodLength);
         path.quadTo(cabinWidth, -halfL + hoodLength + cornerR,
-                    cabinWidth, -halfL + hoodLength + cornerR * 2);
+                cabinWidth, -halfL + hoodLength + cornerR * 2);
 
         path.lineTo(cabinWidth, halfL - trunkLength - cornerR);
 
         path.quadTo(cabinWidth, halfL - trunkLength + cornerR,
-                    rearWidth, halfL - trunkLength + cornerR * 2);
+                rearWidth, halfL - trunkLength + cornerR * 2);
 
         path.lineTo(rearWidth, halfL - cornerR);
         path.quadTo(rearWidth, halfL, rearWidth - cornerR, halfL);
@@ -536,12 +545,12 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
 
         path.lineTo(-rearWidth, halfL - trunkLength + cornerR * 2);
         path.quadTo(-cabinWidth, halfL - trunkLength + cornerR,
-                    -cabinWidth, halfL - trunkLength - cornerR);
+                -cabinWidth, halfL - trunkLength - cornerR);
 
         path.lineTo(-cabinWidth, -halfL + hoodLength + cornerR * 2);
 
         path.quadTo(-cabinWidth, -halfL + hoodLength + cornerR,
-                    -noseWidth, -halfL + hoodLength);
+                -noseWidth, -halfL + hoodLength);
 
         path.lineTo(-noseWidth, -halfL + cornerR);
         path.quadTo(-noseWidth, -halfL, -noseWidth + cornerR, -halfL);
@@ -625,7 +634,8 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     // ================================================================
 
     private void drawWheels(WheelRenderData[] wheels) {
-        if (wheels == null) return;
+        if (wheels == null)
+            return;
         for (WheelRenderData w : wheels) {
             drawSingleWheel(w);
         }
@@ -717,20 +727,28 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         double baseL = length * 0.65;
         double baseY = -length * 0.05 - baseL / 2;
 
-        double baseFLx = -baseW / 2;  double baseFLy = baseY;           // Front-Left
-        double baseFRx =  baseW / 2;  double baseFRy = baseY;           // Front-Right
-        double baseRLx = -baseW / 2;  double baseRLy = baseY + baseL;   // Rear-Left
-        double baseRRx =  baseW / 2;  double baseRRy = baseY + baseL;   // Rear-Right
+        double baseFLx = -baseW / 2;
+        double baseFLy = baseY; // Front-Left
+        double baseFRx = baseW / 2;
+        double baseFRy = baseY; // Front-Right
+        double baseRLx = -baseW / 2;
+        double baseRLy = baseY + baseL; // Rear-Left
+        double baseRRx = baseW / 2;
+        double baseRRy = baseY + baseL; // Rear-Right
 
         // 2. Roof footprint (smaller for perspective, SHIFTED by physics)
         double roofW = baseW * 0.80; // Roof is 20% narrower than the base
         double roofL = baseL * 0.70; // Roof is 30% shorter than the base
         double roofY = baseY + (baseL - roofL) / 2;
 
-        double roofFLx = -roofW / 2 + shiftX;  double roofFLy = roofY + shiftY;           // Front-Left
-        double roofFRx =  roofW / 2 + shiftX;  double roofFRy = roofY + shiftY;           // Front-Right
-        double roofRLx = -roofW / 2 + shiftX;  double roofRLy = roofY + roofL + shiftY;   // Rear-Left
-        double roofRRx =  roofW / 2 + shiftX;  double roofRRy = roofY + roofL + shiftY;   // Rear-Right
+        double roofFLx = -roofW / 2 + shiftX;
+        double roofFLy = roofY + shiftY; // Front-Left
+        double roofFRx = roofW / 2 + shiftX;
+        double roofFRy = roofY + shiftY; // Front-Right
+        double roofRLx = -roofW / 2 + shiftX;
+        double roofRLy = roofY + roofL + shiftY; // Rear-Left
+        double roofRRx = roofW / 2 + shiftX;
+        double roofRRy = roofY + roofL + shiftY; // Rear-Right
 
         // --- DRAWING THE WINDOWS (The 3D sides) ---
         g2d.setColor(WINDSHIELD); // Bluish transparent glass
@@ -775,8 +793,7 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         g2d.setColor(CABIN_FILL);
         reusableRoundRect.setRoundRect(
                 -roofW / 2 + shiftX, roofY + shiftY,
-                roofW, roofL, 2.0, 2.0
-        );
+                roofW, roofL, 2.0, 2.0);
         g2d.fill(reusableRoundRect);
 
         // --- DRAWING THE ARISTAS (Corner Lines) ---
@@ -784,21 +801,20 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         g2d.setStroke(STROKE_1_0);
 
         // Draw the 4 corner pillars connecting the roof to the body
-        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)roofFLx, (int)roofFLy);
-        g2d.drawLine((int)baseFRx, (int)baseFRy, (int)roofFRx, (int)roofFRy);
-        g2d.drawLine((int)baseRLx, (int)baseRLy, (int)roofRLx, (int)roofRLy);
-        g2d.drawLine((int)baseRRx, (int)baseRRy, (int)roofRRx, (int)roofRRy);
+        g2d.drawLine((int) baseFLx, (int) baseFLy, (int) roofFLx, (int) roofFLy);
+        g2d.drawLine((int) baseFRx, (int) baseFRy, (int) roofFRx, (int) roofFRy);
+        g2d.drawLine((int) baseRLx, (int) baseRLy, (int) roofRLx, (int) roofRLy);
+        g2d.drawLine((int) baseRRx, (int) baseRRy, (int) roofRRx, (int) roofRRy);
 
         // Draw the outline around the base (bottom of the windows)
-        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)baseFRx, (int)baseFRy);
-        g2d.drawLine((int)baseRLx, (int)baseRLy, (int)baseRRx, (int)baseRRy);
-        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)baseRLx, (int)baseRLy);
-        g2d.drawLine((int)baseFRx, (int)baseFRy, (int)baseRRx, (int)baseRRy);
+        g2d.drawLine((int) baseFLx, (int) baseFLy, (int) baseFRx, (int) baseFRy);
+        g2d.drawLine((int) baseRLx, (int) baseRLy, (int) baseRRx, (int) baseRRy);
+        g2d.drawLine((int) baseFLx, (int) baseFLy, (int) baseRLx, (int) baseRLy);
+        g2d.drawLine((int) baseFRx, (int) baseFRy, (int) baseRRx, (int) baseRRy);
 
         // Draw the outline around the roof
         g2d.draw(reusableRoundRect);
     }
-
 
     // ================================================================
     // HUD (cached fonts and colors — drawn in screen space)

@@ -21,4 +21,16 @@ public interface TerrainProvider {
      * @return the surface type at that location; never null
      */
     SurfaceType getSurfaceAt(double worldX, double worldY);
+
+    /**
+     * Returns the terrain elevation (arbitrary units) at the given world position.
+     * <p>
+     * Prepared for future physics use (slope forces, grade resistance).
+     * Current physics code does not call this method yet.
+     *
+     * @param worldX X position in metres
+     * @param worldY Y position in metres
+     * @return elevation value at that location
+     */
+    double getElevationAt(double worldX, double worldY);
 }

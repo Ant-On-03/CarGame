@@ -17,10 +17,10 @@ import com.game.domain.physics.models.WeightTransferCalculator;
  * <p>
  * The simulation scripts a sequence of control inputs to:
  * <ol>
- *   <li>Accelerate straight (build speed)</li>
- *   <li>Steer hard while on throttle (initiate drift)</li>
- *   <li>Counter-steer with partial throttle (hold the drift)</li>
- *   <li>Straighten and coast (recover)</li>
+ * <li>Accelerate straight (build speed)</li>
+ * <li>Steer hard while on throttle (initiate drift)</li>
+ * <li>Counter-steer with partial throttle (hold the drift)</li>
+ * <li>Straighten and coast (recover)</li>
  * </ol>
  * <p>
  * Uses a no-op terrain provider (always TARMAC) since there is no
@@ -29,7 +29,7 @@ import com.game.domain.physics.models.WeightTransferCalculator;
 public class ConsoleSimulationRunner {
 
     private static final double DT = 1.0 / 60.0;
-    private static final int TOTAL_FRAMES = 360;  // 6 seconds
+    private static final int TOTAL_FRAMES = 360; // 6 seconds
     private static final int PRINT_INTERVAL = 15; // print every 0.25s
 
     public static void main(String[] args) {
@@ -134,12 +134,20 @@ public class ConsoleSimulationRunner {
     // ---- Wiring ----
 
     private static UpdateVehiclePhysicsUseCase createUseCase() {
-        // No-op terrain provider: always returns TARMAC for headless simulation
+        // No-op terrain provider: always returns TARMAC, flat elevation
         return new UpdateVehiclePhysicsUseCase(
                 new VehiclePhysicsEngine(
                         new ArcadeMayhemStrategy(new WeightTransferCalculator()),
-                        (x, y) -> SurfaceType.TARMAC
-                )
-        );
+                        new com.game.ports.TerrainProvider() {
+                            @Override
+                            public SurfaceType getSurfaceAt(double worldX, double worldY) {
+                                return SurfaceType.TARMAC;
+                            }
+
+                            @Override
+                            public double getElevationAt(double worldX, double worldY) {
+                                return 0.0;
+                            }
+                        }));
     }
 }

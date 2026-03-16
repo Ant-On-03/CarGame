@@ -3,7 +3,8 @@ package com.game.main;
 import com.game.adapters.Java2DRendererAdapter;
 import com.game.adapters.KeyboardInputAdapter;
 import com.game.adapters.ParameterTuningOverlay;
-import com.game.adapters.ProceduralTerrainGenerator;
+import com.game.adapters.terrain.TerrainChunkGenerator;
+import com.game.adapters.terrain.TerrainImageRenderer;
 import com.game.application.UpdateVehiclePhysicsUseCase;
 import com.game.domain.world.Camera;
 import com.game.domain.vehicle.Car;
@@ -14,6 +15,12 @@ import com.game.domain.physics.strategies.SimulationHandlingStrategy;
 import com.game.domain.physics.models.TireForceModel;
 import com.game.domain.physics.VehiclePhysicsEngine;
 import com.game.domain.physics.models.WeightTransferCalculator;
+import com.game.domain.world.terrain.ElevationFunction;
+import com.game.domain.world.terrain.NoiseGenerator;
+import com.game.domain.world.terrain.SinusoidalElevation;
+import com.game.domain.world.terrain.SurfaceClassifier;
+import com.game.domain.world.terrain.TerrainConfig;
+import com.game.domain.world.terrain.ValueNoiseGenerator;
 
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -41,19 +48,29 @@ public class Main {
     private static void launch() {
         // --- Adapters ---
         KeyboardInputAdapter inputAdapter = new KeyboardInputAdapter();
-        Java2DRendererAdapter rendererAdapter =
-                new Java2DRendererAdapter(WINDOW_WIDTH, WINDOW_HEIGHT);
+        Java2DRendererAdapter rendererAdapter = new Java2DRendererAdapter(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-        // --- Terrain ---
-        ProceduralTerrainGenerator terrainGenerator = new ProceduralTerrainGenerator();
-        rendererAdapter.setTerrainGenerator(terrainGenerator);
+        // --- Terrain (Domain) ---
+        NoiseGenerator noise = new ValueNoiseGenerator(42L);
+        TerrainConfig terrainConfig = TerrainConfig.defaults();
+        SurfaceClassifier surfaceClassifier = new SurfaceClassifier(noise, terrainConfig);
+        ElevationFunction elevation = new SinusoidalElevation();
+
+        // --- Terrain (Adapters) ---
+        TerrainChunkGenerator chunkGenerator = new TerrainChunkGenerator(
+                surfaceClassifier, elevation, terrainConfig);
+        TerrainImageRenderer imageRenderer = new TerrainImageRenderer(
+                chunkGenerator, elevation, terrainConfig);
+
+        // Wire renderer → terrain image port
+        rendererAdapter.setTerrainImageProvider(imageRenderer);
 
         // --- Window ---
         JFrame frame = createWindow(rendererAdapter, inputAdapter);
 
         // --- Domain ---
         CarConfig config = CarConfig.driftTuned();
-        double startX = 0.0;  // start at world origin
+        double startX = 0.0; // start at world origin
         double startY = 0.0;
         Car car = new Car(new Vector2(startX, startY), config);
 
@@ -72,8 +89,9 @@ public class Main {
         SimulationHandlingStrategy simStrategy = new SimulationHandlingStrategy(
                 weightTransfer, new TireForceModel());
 
+        // Physics depends on TerrainProvider port (chunkGenerator implements it)
         VehiclePhysicsEngine physicsEngine = new VehiclePhysicsEngine(
-                arcadeStrategy, terrainGenerator);
+                arcadeStrategy, chunkGenerator);
         UpdateVehiclePhysicsUseCase physics = new UpdateVehiclePhysicsUseCase(physicsEngine);
 
         // Wire strategy switching into the tuning overlay (M key to cycle)
@@ -99,7 +117,7 @@ public class Main {
     }
 
     private static JFrame createWindow(Java2DRendererAdapter canvas,
-                                       KeyboardInputAdapter input) {
+            KeyboardInputAdapter input) {
         JFrame frame = new JFrame(TITLE);
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.setResizable(false);
