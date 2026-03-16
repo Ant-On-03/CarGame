@@ -1,11 +1,11 @@
 package com.game.main;
 
 import com.game.application.UpdateVehiclePhysicsUseCase;
-import com.game.domain.Camera;
-import com.game.domain.Car;
-import com.game.domain.ControlInput;
-import com.game.domain.Vector2;
-import com.game.domain.Wheel;
+import com.game.domain.world.Camera;
+import com.game.domain.vehicle.Car;
+import com.game.domain.core.ControlInput;
+import com.game.domain.core.Vector2;
+import com.game.domain.vehicle.Wheel;
 import com.game.ports.InputProvider;
 import com.game.ports.Renderer;
 import com.game.ports.WheelRenderData;

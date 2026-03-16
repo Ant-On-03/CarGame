@@ -1,7 +1,7 @@
 package com.game.application;
 
-import com.game.domain.Car;
-import com.game.domain.ControlInput;
+import com.game.domain.vehicle.Car;
+import com.game.domain.core.ControlInput;
 import com.game.domain.physics.VehiclePhysicsEngine;
 
 /**

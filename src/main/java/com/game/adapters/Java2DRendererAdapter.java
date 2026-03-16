@@ -659,11 +659,11 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
     // ================================================================
     // Car rendering: roof/cabin
     // ================================================================
-
     private void drawRoof(double width, double length, WheelRenderData[] wheels) {
         double shiftX = 0.0;
         double shiftY = 0.0;
 
+        // Calculate roof shift based on G-forces (weight transfer)
         if (wheels != null && wheels.length > 0) {
             double totalForce = 0.0;
             double weightedX = 0.0;
@@ -689,53 +689,95 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
             }
         }
 
-        double cabinW = width * 0.50;
-        double cabinL = length * 0.40;
-        double cabinCentreY = -length * 0.05;
+        // --- 3D CABIN GEOMETRY ---
 
-        // Windshield (GeneralPath — small, rebuilt each frame since shift changes)
-        double windshieldW = cabinW * 0.95;
-        double windshieldL = cabinL * 0.35;
-        double windshieldY = cabinCentreY - cabinL / 2;
-        double windshieldNarrowW = windshieldW * 0.75;
+        // 1. Base footprint (attached to the car body, NO shift)
+        double baseW = width * 0.60;
+        double baseL = length * 0.45;
+        double baseY = -length * 0.05 - baseL / 2;
 
-        GeneralPath windshield = new GeneralPath();
-        windshield.moveTo(-windshieldNarrowW / 2 + shiftX, windshieldY + shiftY);
-        windshield.lineTo(windshieldNarrowW / 2 + shiftX, windshieldY + shiftY);
-        windshield.lineTo(windshieldW / 2 + shiftX, windshieldY + windshieldL + shiftY);
-        windshield.lineTo(-windshieldW / 2 + shiftX, windshieldY + windshieldL + shiftY);
-        windshield.closePath();
+        double baseFLx = -baseW / 2;  double baseFLy = baseY;           // Front-Left
+        double baseFRx =  baseW / 2;  double baseFRy = baseY;           // Front-Right
+        double baseRLx = -baseW / 2;  double baseRLy = baseY + baseL;   // Rear-Left
+        double baseRRx =  baseW / 2;  double baseRRy = baseY + baseL;   // Rear-Right
 
-        g2d.setColor(WINDSHIELD);
-        g2d.fill(windshield);
+        // 2. Roof footprint (smaller for perspective, SHIFTED by physics)
+        double roofW = baseW * 0.80; // Roof is 20% narrower than the base
+        double roofL = baseL * 0.70; // Roof is 30% shorter than the base
+        double roofY = baseY + (baseL - roofL) / 2;
 
-        // Main cabin
-        double mainCabinY = windshieldY + windshieldL;
-        double mainCabinL = cabinL - windshieldL;
+        double roofFLx = -roofW / 2 + shiftX;  double roofFLy = roofY + shiftY;           // Front-Left
+        double roofFRx =  roofW / 2 + shiftX;  double roofFRy = roofY + shiftY;           // Front-Right
+        double roofRLx = -roofW / 2 + shiftX;  double roofRLy = roofY + roofL + shiftY;   // Rear-Left
+        double roofRRx =  roofW / 2 + shiftX;  double roofRRy = roofY + roofL + shiftY;   // Rear-Right
 
-        reusableRoundRect.setRoundRect(
-                -cabinW / 2 + shiftX, mainCabinY + shiftY,
-                cabinW, mainCabinL, 3.0, 3.0);
+        // --- DRAWING THE WINDOWS (The 3D sides) ---
+        g2d.setColor(WINDSHIELD); // Bluish transparent glass
 
+        // Front Windshield Polygon
+        GeneralPath frontGlass = new GeneralPath();
+        frontGlass.moveTo(baseFLx, baseFLy);
+        frontGlass.lineTo(roofFLx, roofFLy);
+        frontGlass.lineTo(roofFRx, roofFRy);
+        frontGlass.lineTo(baseFRx, baseFRy);
+        frontGlass.closePath();
+        g2d.fill(frontGlass);
+
+        // Rear Glass Polygon
+        GeneralPath rearGlass = new GeneralPath();
+        rearGlass.moveTo(baseRLx, baseRLy);
+        rearGlass.lineTo(roofRLx, roofRLy);
+        rearGlass.lineTo(roofRRx, roofRRy);
+        rearGlass.lineTo(baseRRx, baseRRy);
+        rearGlass.closePath();
+        g2d.fill(rearGlass);
+
+        // Left Window Polygon
+        GeneralPath leftGlass = new GeneralPath();
+        leftGlass.moveTo(baseFLx, baseFLy);
+        leftGlass.lineTo(roofFLx, roofFLy);
+        leftGlass.lineTo(roofRLx, roofRLy);
+        leftGlass.lineTo(baseRLx, baseRLy);
+        leftGlass.closePath();
+        g2d.fill(leftGlass);
+
+        // Right Window Polygon
+        GeneralPath rightGlass = new GeneralPath();
+        rightGlass.moveTo(baseFRx, baseFRy);
+        rightGlass.lineTo(roofFRx, roofFRy);
+        rightGlass.lineTo(roofRRx, roofRRy);
+        rightGlass.lineTo(baseRRx, baseRRy);
+        rightGlass.closePath();
+        g2d.fill(rightGlass);
+
+        // --- DRAWING THE ROOF (The Top Sprite) ---
         g2d.setColor(CABIN_FILL);
+        reusableRoundRect.setRoundRect(
+                -roofW / 2 + shiftX, roofY + shiftY,
+                roofW, roofL, 2.0, 2.0
+        );
         g2d.fill(reusableRoundRect);
 
-        // Rear window
-        double rearGlassH = mainCabinL * 0.25;
-        double rearGlassW = cabinW * 0.80;
-        double rearGlassY = mainCabinY + mainCabinL - rearGlassH;
-
-        g2d.setColor(REAR_GLASS);
-        g2d.fillRoundRect(
-                (int) (-rearGlassW / 2 + shiftX), (int) (rearGlassY + shiftY),
-                (int) rearGlassW, (int) rearGlassH, 2, 2);
-
-        // Cabin outline
+        // --- DRAWING THE ARISTAS (Corner Lines) ---
         g2d.setColor(CABIN_OUTLINE);
         g2d.setStroke(STROKE_1_0);
-        g2d.draw(windshield);
+
+        // Draw the 4 corner pillars connecting the roof to the body
+        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)roofFLx, (int)roofFLy);
+        g2d.drawLine((int)baseFRx, (int)baseFRy, (int)roofFRx, (int)roofFRy);
+        g2d.drawLine((int)baseRLx, (int)baseRLy, (int)roofRLx, (int)roofRLy);
+        g2d.drawLine((int)baseRRx, (int)baseRRy, (int)roofRRx, (int)roofRRy);
+
+        // Draw the outline around the base (bottom of the windows)
+        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)baseFRx, (int)baseFRy);
+        g2d.drawLine((int)baseRLx, (int)baseRLy, (int)baseRRx, (int)baseRRy);
+        g2d.drawLine((int)baseFLx, (int)baseFLy, (int)baseRLx, (int)baseRLy);
+        g2d.drawLine((int)baseFRx, (int)baseFRy, (int)baseRRx, (int)baseRRy);
+
+        // Draw the outline around the roof
         g2d.draw(reusableRoundRect);
     }
+    
 
     // ================================================================
     // HUD (cached fonts and colors — drawn in screen space)

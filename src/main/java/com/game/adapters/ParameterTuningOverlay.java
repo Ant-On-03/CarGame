@@ -1,10 +1,10 @@
 package com.game.adapters;
 
-import com.game.domain.Car;
-import com.game.domain.CarConfig;
-import com.game.domain.DriveType;
-import com.game.domain.Tire;
-import com.game.domain.physics.HandlingStrategy;
+import com.game.domain.vehicle.Car;
+import com.game.domain.vehicle.CarConfig;
+import com.game.domain.vehicle.DriveType;
+import com.game.domain.vehicle.Tire;
+import com.game.domain.physics.strategies.HandlingStrategy;
 import com.game.domain.physics.VehiclePhysicsEngine;
 
 import java.awt.BasicStroke;

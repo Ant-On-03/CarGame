@@ -1,15 +1,15 @@
 package com.game.adapters;
 
 import com.game.application.UpdateVehiclePhysicsUseCase;
-import com.game.domain.Car;
-import com.game.domain.CarConfig;
-import com.game.domain.ControlInput;
+import com.game.domain.vehicle.Car;
+import com.game.domain.vehicle.CarConfig;
+import com.game.domain.core.ControlInput;
 import com.game.domain.SurfaceType;
-import com.game.domain.Vector2;
-import com.game.domain.Wheel;
-import com.game.domain.physics.ArcadeMayhemStrategy;
+import com.game.domain.core.Vector2;
+import com.game.domain.vehicle.Wheel;
+import com.game.domain.physics.strategies.ArcadeMayhemStrategy;
 import com.game.domain.physics.VehiclePhysicsEngine;
-import com.game.domain.physics.WeightTransferCalculator;
+import com.game.domain.physics.models.WeightTransferCalculator;
 
 /**
  * Infrastructure adapter that runs a scripted physics simulation in the

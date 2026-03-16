@@ -1,7 +1,8 @@
 package com.game.domain.physics;
 
-import com.game.domain.Car;
-import com.game.domain.ControlInput;
+import com.game.domain.vehicle.Car;
+import com.game.domain.core.ControlInput;
+import com.game.domain.physics.strategies.HandlingStrategy;
 import com.game.ports.TerrainProvider;
 
 /**
