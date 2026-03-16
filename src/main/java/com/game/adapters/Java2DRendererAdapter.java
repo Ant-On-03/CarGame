@@ -302,11 +302,9 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         int screenW = getWidth();
         int screenH = getHeight();
 
-        // Camera pixel position (world-space)
         double camPxX = cameraWorldX * ppm;
         double camPxY = cameraWorldY * ppm;
 
-        // Viewport bounds in world metres
         double viewLeftM = cameraWorldX - (screenW / 2.0) / ppm;
         double viewTopM = cameraWorldY - (screenH / 2.0) / ppm;
         double viewRightM = cameraWorldX + (screenW / 2.0) / ppm;
@@ -320,24 +318,47 @@ public class Java2DRendererAdapter extends Canvas implements Renderer {
         int minChunkY = (int) Math.floor(viewTopM / chunkSize);
         int maxChunkY = (int) Math.floor(viewBottomM / chunkSize);
 
-        // Screen centre offset for world-to-screen conversion
         double offsetX = screenW / 2.0 - camPxX;
         double offsetY = screenH / 2.0 - camPxY;
 
-        for (int cy = minChunkY; cy <= maxChunkY; cy++) {
-            for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-                BufferedImage chunkImg = terrainGenerator.getChunkImage(cx, cy);
+        double screenCenterX = screenW / 2.0;
+        double screenCenterY = screenH / 2.0;
 
-                // Chunk world-pixel position
-                double chunkWorldPxX = cx * chunkSize * ppm;
-                double chunkWorldPxY = cy * chunkSize * ppm;
+        // Parallax intensity
+        double parallaxScaleFactor = 0.05;
 
-                // Screen position
-                int screenX = (int) (chunkWorldPxX + offsetX);
-                int screenY = (int) (chunkWorldPxY + offsetY);
+        // Draw terrain layers bottom → top
+        for (int z = 0; z < ProceduralTerrainGenerator.MAX_POSSIBLE_LAYERS; z++) {
 
-                g2d.drawImage(chunkImg, screenX, screenY, chunkPx, chunkPx, null);
+            double layerScale = 1.0 + (z * parallaxScaleFactor);
+            java.awt.geom.AffineTransform savedTransform = g2d.getTransform();
+
+            // Scale around screen center
+            g2d.translate(screenCenterX, screenCenterY);
+            g2d.scale(layerScale, layerScale);
+            g2d.translate(-screenCenterX, -screenCenterY);
+
+            for (int cy = minChunkY; cy <= maxChunkY; cy++) {
+                for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+
+                    BufferedImage[] layers = terrainGenerator.getChunkImages(cx, cy);
+                    BufferedImage layerImage = layers[z];
+
+                    // Skip empty layers
+                    if (layerImage != null) {
+
+                        double chunkWorldPxX = cx * chunkSize * ppm;
+                        double chunkWorldPxY = cy * chunkSize * ppm;
+
+                        int screenX = (int) (chunkWorldPxX + offsetX);
+                        int screenY = (int) (chunkWorldPxY + offsetY);
+
+                        g2d.drawImage(layerImage, screenX, screenY, chunkPx, chunkPx, null);
+                    }
+                }
             }
+
+            g2d.setTransform(savedTransform);
         }
 
         // Evict distant chunks periodically

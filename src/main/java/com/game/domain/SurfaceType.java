@@ -31,6 +31,7 @@ public enum SurfaceType {
     /** Dry sand — poor grip, very heavy drag. */
     SAND(0.45, 100.0);
 
+
     private final double frictionMultiplier;
     private final double extraRollingResistance;
 
