@@ -22,12 +22,12 @@ public final class SurfaceColorPalette {
      */
     public static int colorFor(SurfaceType type) {
         return switch (type) {
-            case TARMAC -> 0x555555;
-            case DIRT -> 0x6B5428;
-            case MUD -> 0x3D2817;
-            case ICE -> 0xA0D0E0;
-            case GRAVEL -> 0x8A8070;
-            case SAND -> 0xC2B280;
+            case TARMAC -> 0x3E4C41; // Mossy dark asphalt
+            case DIRT   -> 0x5C8038; // Vibrant, lush green grass
+            case MUD    -> 0x324D22; // Deep, dark swampy green
+            case ICE    -> 0x98C9A3; // Crisp, minty icy green
+            case GRAVEL -> 0x6B7D67; // Earthy, greenish stone
+            case SAND   -> 0x8A9A41; // Yellow-green mossy sand
         };
     }
 }

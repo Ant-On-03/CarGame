@@ -163,7 +163,6 @@ public class LibGDXRendererAdapter implements Renderer {
         double ppm = pixelsPerMeter;
         double chunkSize = terrainRenderer.getRenderConfig().chunkSizeMetres();
 
-        // CAST FIX: Explicitly making this a float so batch.draw() never complains
         float screenChunkPx = (float) (chunkSize * ppm);
 
         int maxLayers = terrainRenderer.getRenderConfig().maxLayers();
@@ -172,7 +171,6 @@ public class LibGDXRendererAdapter implements Renderer {
         int screenW = Gdx.graphics.getWidth();
         int screenH = Gdx.graphics.getHeight();
 
-        // View bounds. Added an extra chunk of padding to account for the outward scaling.
         double viewRadiusX = (screenW / 2.0) / ppm + chunkSize;
         double viewRadiusY = (screenH / 2.0) / ppm + chunkSize;
 
@@ -183,33 +181,41 @@ public class LibGDXRendererAdapter implements Renderer {
 
         batch.setShader(terrainShader);
 
-        // Draw each layer from bottom to top
+        terrainShader.bind();
+
+        // --- GLOBAL LIGHTING ---
+
+        // Lower sun angle for stronger terrain shadows
+        terrainShader.setUniformf("u_lightDir", 0.35f, -0.35f, 0.55f);
+
+        // Warmer sunlight (golden hour tone)
+        terrainShader.setUniformf("u_lightColor", 1.0f, 0.82f, 0.60f);
+
+        // Stronger warm outline for slope readability
+        terrainShader.setUniformf("u_outlineColor", 0.12f, 0.09f, 0.06f);
+        terrainShader.setUniformf("u_outlineThickness", 1.4f);
+
+        float baseTexelSize = 1.0f / terrainRenderer.getRenderConfig().chunkSizePixels();
+
         for (int z = 0; z < maxLayers; z++) {
 
             float layerScale = 1.0f + (z * parallaxScale);
 
-            // THE PROPER FISHEYE/PARALLAX MATH:
-            // By adjusting the camera zoom, the world scales perfectly around the center focal point!
             camera.zoom = 1.0f / layerScale;
             camera.update();
 
             batch.setProjectionMatrix(camera.combined);
             batch.begin();
 
-            // SAFETY FIX: Force OpenGL to bind the shader before pushing uniforms
-            terrainShader.bind();
             terrainShader.setUniformf("u_targetBand", (float) z);
             terrainShader.setUniformf("u_totalBands", (float) maxLayers);
 
-            //AHÍ VA
-            // --- NEW LIGHTING & BORDER UNIFORMS ---
-            float texelSize = 1.0f / terrainRenderer.getRenderConfig().chunkSizePixels();
+            // Softer atmospheric depth
+            float layerDepth = ((float) z / (float) maxLayers) * 0.45f;
+            terrainShader.setUniformf("u_layerDepth", layerDepth);
+
+            float texelSize = baseTexelSize * layerScale;
             terrainShader.setUniformf("u_texelSize", texelSize, texelSize);
-            // Sun direction
-            terrainShader.setUniformf("u_lightDir", 0.5f, -0.5f, 0.7f);
-            // Outline settings
-            terrainShader.setUniformf("u_outlineColor", 0.05f, 0.05f, 0.1f);
-            terrainShader.setUniformf("u_outlineThickness", 1.0f);
 
             for (int cy = minChunkY; cy <= maxChunkY; cy++) {
                 for (int cx = minChunkX; cx <= maxChunkX; cx++) {
@@ -220,21 +226,19 @@ public class LibGDXRendererAdapter implements Renderer {
                         float chunkWorldPxX = (float) (cx * chunkSize * ppm);
                         float chunkWorldPxY = (float) (cy * chunkSize * ppm);
 
-                        // All parameters are now explicit floats!
                         batch.draw(chunkTex, chunkWorldPxX, chunkWorldPxY, screenChunkPx, screenChunkPx);
                     }
                 }
             }
+
             batch.end();
         }
 
-        // IMPORTANT: Restore camera zoom to 1.0 so the Car and HUD don't get scaled!
-        camera.zoom = 1.0f;
+        camera.zoom = 1f;
         camera.update();
-        batch.setShader(null);
-
-        terrainRenderer.evictDistantChunks(cameraWorldX, cameraWorldY);
     }
+
+
 
     // ================================================================
     // Helpers (Tire Marks, Wheels, HUD)
