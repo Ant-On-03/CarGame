@@ -4,6 +4,7 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.game.adapters.LibGDXInputAdapter;
 import com.game.adapters.LibGDXRendererAdapter;
+import com.game.adapters.terrain.LibGDXTerrainRenderer;
 import com.game.adapters.terrain.TerrainChunkGenerator;
 // import com.game.adapters.ParameterTuningOverlay; // (Assuming you adapt this to LibGDX next)
 import com.game.application.UpdateVehiclePhysicsUseCase;
@@ -74,6 +75,10 @@ public class CarGameCore extends ApplicationAdapter {
         // --- Hardware Adapters (LibGDX) ---
         inputAdapter = new LibGDXInputAdapter();
         rendererAdapter = new LibGDXRendererAdapter();
+
+        // ADD THESE TWO LINES:
+        LibGDXTerrainRenderer terrainRenderer = new LibGDXTerrainRenderer(chunkGenerator, elevation, terrainConfig);
+        rendererAdapter.setTerrainRenderer(terrainRenderer);
 
         // --- Domain Entities ---
         CarConfig config = CarConfig.driftTuned();

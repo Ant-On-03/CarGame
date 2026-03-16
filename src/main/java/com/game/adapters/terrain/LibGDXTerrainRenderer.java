@@ -148,10 +148,13 @@ public class LibGDXTerrainRenderer {
                 pixmap.drawPixel(px, py, rgba);
             }
         }
-
         // 4. Upload Pixmap to GPU Texture and free CPU memory
         Texture texture = new Texture(pixmap);
         texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
+        // ADD THIS LINE: Tell OpenGL to wrap/tile the texture instead of smearing it!
+        texture.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+
         pixmap.dispose();
 
         return texture;
@@ -159,5 +162,12 @@ public class LibGDXTerrainRenderer {
 
     private static int clampByte(int value) {
         return Math.max(0, Math.min(255, value));
+    }
+    /**
+     * Exposes the elevation so the main renderer can scale the car and tire marks
+     * to match the exact altitude of the 3D terrain beneath them.
+     */
+    public double getElevationAt(double worldX, double worldY) {
+        return elevationFunction.getElevation(worldX, worldY);
     }
 }

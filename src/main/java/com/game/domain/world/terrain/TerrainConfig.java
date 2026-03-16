@@ -59,14 +59,17 @@ public record TerrainConfig(
         return new TerrainConfig(
                 64.0, // chunkSizeMetres
                 32, // cellsPerChunk
-                256, // chunkImageResolution (half-res, upscaled by renderer)
+                256, // chunkImageResolution
                 0.005, // biomeFrequency
                 0.01, // roadFrequency
                 0.8, // roadThreshold
-                200, // elevationLevels (color/shading precision)
-                24, // parallaxBands (actual drawable layers)
+                200, // elevationLevels
+
+                // --- CHANGED THESE TWO VALUES ---
+                100,   // parallaxBands (was 24) - The number of 3D slices drawn
+                0.01,  // parallaxScaleFactor (was 0.04) - Make the gap between slices smaller
+
                 0.008, // elevationFrequency
-                0.04, // parallaxScaleFactor (adjusted for 24 bands)
                 3 // evictionRadius
         );
     }
