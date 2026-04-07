@@ -34,3 +34,12 @@ public interface TerrainProvider {
      */
     double getElevationAt(double worldX, double worldY);
 }
+
+
+
+
+
+
+
+
+
